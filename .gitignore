@@ -48,3 +48,6 @@ build/
 Session.vim
 .netrwhist
 *~
+
+# .nfs files
+.nfs*

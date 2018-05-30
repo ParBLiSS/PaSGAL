@@ -5,7 +5,8 @@
 #include <iostream>
 
 #include "clipp.h"
-#include "include/graphLoad.hpp"
+#include "graphLoad.hpp"
+#include "graphLayout.hpp"
 
 int main(int argc, char **argv)
 {
@@ -21,6 +22,11 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  psgl::graphLoader<uint32_t, uint32_t> gload;
-  gload.loadFromVG(infile);
+  psgl::graphLoader<uint32_t, uint32_t> g;
+  g.loadFromVG(infile);
+
+  std::vector<uint32_t> order(g.diGraph.numVertices);
+  psgl::topologicalSort(g.diGraph, order); 
+
+  std::cout << "Pseudo distance = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
 }
