@@ -25,8 +25,12 @@ int main(int argc, char **argv)
   psgl::graphLoader<uint32_t, uint32_t> g;
   g.loadFromVG(infile);
 
-  std::vector<uint32_t> order(g.diGraph.numVertices);
-  psgl::topologicalSort(g.diGraph, order); 
+#ifdef DEBUG
+  g.printGraph();
+#endif
 
-  std::cout << "Pseudo distance = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
+  std::vector<uint32_t> order(g.diGraph.numVertices);
+  psgl::topologicalSort(g.diGraph, 1000, order); 
+
+  std::cout << "directed bandwidth distance = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
 }

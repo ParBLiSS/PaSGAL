@@ -18,8 +18,8 @@ IF(NOT CMAKE_BUILD_TYPE)
     FORCE)
 ENDIF(NOT CMAKE_BUILD_TYPE)
 
-
 #Configure Protobuf (path needs to be configured by each user)
+#TODO: automate generation of protobuf cpp file
 set(PROTOBUF_INCLUDE_DIRS "/projects/PCL-GBB/chirag/software/protobuf/build/include")
 set(PROTOBUF_LIBRARY "/projects/PCL-GBB/chirag/software/protobuf/build/lib/libprotobuf.so")
 
@@ -27,7 +27,5 @@ include_directories("${PROJECT_SOURCE_DIR}/ext")
 include_directories("${PROJECT_SOURCE_DIR}/src/include")
 include_directories(${PROTOBUF_INCLUDE_DIRS})
 
-
 add_executable(PaSGAL "${PROJECT_SOURCE_DIR}/src/main.cpp" "${PROJECT_SOURCE_DIR}/src/vg.pb.cc")
 target_link_libraries(PaSGAL ${PROTOBUF_LIBRARY} -lz -lpthread)
-
