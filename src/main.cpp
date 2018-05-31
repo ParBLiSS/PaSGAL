@@ -22,15 +22,31 @@ int main(int argc, char **argv)
     exit(1);
   }
 
+  std::cout << "INFO, psgl::main, input file = " << infile << std::endl;
+
   psgl::graphLoader<uint32_t, uint32_t> g;
   g.loadFromVG(infile);
+
+  std::cout << "INFO, psgl::main, graph loaded in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << std::endl;
 
 #ifdef DEBUG
   g.printGraph();
 #endif
 
-  std::vector<uint32_t> order(g.diGraph.numVertices);
-  psgl::topologicalSort(g.diGraph, 1000, order); 
+  {
+    std::vector<uint32_t> order(g.diGraph.numVertices);
+    int runs = 20;
 
-  std::cout << "directed bandwidth distance = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
+    psgl::topologicalSort(g.diGraph, runs, order); 
+
+    std::cout << "INFO, psgl::main, topological sort [rand" << runs << "] computed, bandwidth = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
+  }
+
+
+  {
+    std::vector<uint32_t> order(g.diGraph.numVertices);
+    psgl::topologicalSort(g.diGraph, order); 
+
+    std::cout << "INFO, psgl::main, topological sort [FIFO] computed, bandwidth = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
+  }
 }
