@@ -21,9 +21,11 @@ namespace psgl
    * @brief     class to support storage of directed graph in CSR format
    * @details   CSR is a popular graph storage format-
    *            - vertex numbering starts from 0
-   *            - Adjacency list of vertex i is stored in array 'adjcny'
-   *              starting at index offsets[i] and ending at (but not including)
-   *              index offsets[i+1]
+   *            - both outgoing and incoming edges are store separately 
+   *              - this is redundant but convenient for analysis
+   *              - Adjacency (out/in) list of vertex i is stored in array 
+   *                'adjcny_' starting at index offsets_[i] and 
+   *                ending at (but not including) index offsets_[i+1]
    */
   template <typename VertexIdType, typename EdgeIdType>
     class CSR_container
@@ -35,10 +37,12 @@ namespace psgl
         EdgeIdType numEdges;
 
         //contiguous adjacency list of all vertices, size = numEdges
-        std::vector<VertexIdType> adjcny;  
+        std::vector<VertexIdType> adjcny_in;  
+        std::vector<VertexIdType> adjcny_out;  
 
         //offsets in adjacency list for each vertex, size = numVertices + 1
-        std::vector<EdgeIdType> offsets;
+        std::vector<EdgeIdType> offsets_in;
+        std::vector<EdgeIdType> offsets_out;
 
         //Container to hold metadata (e.g., DNA sequence) of all vertices in graph
         std::vector<std::string> vertex_metadata;
@@ -67,22 +71,32 @@ namespace psgl
 
           //adjacency list
           {
-            assert(adjcny.size() == this->numEdges);
+            assert(adjcny_in.size() == this->numEdges);
+            assert(adjcny_out.size() == this->numEdges);
 
-            for(auto vId : adjcny)
+            for(auto vId : adjcny_in)
+              assert(vId >=0 && vId < this->numVertices);
+
+            for(auto vId : adjcny_out)
               assert(vId >=0 && vId < this->numVertices);
           }
 
           //offset array
           {
-            assert(offsets.size() == this->numVertices + 1);
+            assert(offsets_in.size() == this->numVertices + 1);
+            assert(offsets_out.size() == this->numVertices + 1);
 
-            for(auto off : offsets)
+            for(auto off : offsets_in)
               assert(off >=0 && off <= this->numEdges); 
 
-            assert(std::is_sorted(offsets.begin(), offsets.end()));
+            for(auto off : offsets_out)
+              assert(off >=0 && off <= this->numEdges); 
 
-            assert(offsets.back() == this->numEdges);
+            assert(std::is_sorted(offsets_in.begin(), offsets_in.end()));
+            assert(std::is_sorted(offsets_out.begin(), offsets_out.end()));
+
+            assert(offsets_in.back() == this->numEdges);
+            assert(offsets_out.back() == this->numEdges);
           }
         }
 
@@ -124,28 +138,63 @@ namespace psgl
           }
 
           this->numEdges = diEdgeVector.size();
-          adjcny.reserve(this->numEdges);
-          offsets.resize(this->numVertices + 1);
 
-          //Sort the edge vector before adding it into adjcny
-          std::sort(diEdgeVector.begin(), diEdgeVector.end());
-
-          //Compute offsets and adjcny vectors
-          offsets[0] = 0;
-          auto it_b = diEdgeVector.begin();
-
-          for(VertexIdType i = 0; i < this->numVertices; i++)
+          //out-edges
           {
-            //Range for adjacency list of vertex i
-            auto it_e = std::find_if(it_b, diEdgeVector.end(), [i](std::pair<VertexIdType, VertexIdType> &e) { return e.first > i; });
+            adjcny_out.reserve(this->numEdges);
+            offsets_out.resize(this->numVertices + 1);
 
-            offsets[i+1] = std::distance(diEdgeVector.begin(), it_e);
+            //Sort the edge vector before adding it into adjcny
+            std::sort(diEdgeVector.begin(), diEdgeVector.end());
 
-            for(auto it = it_b; it != it_e; it++)
-              adjcny.push_back(it->second);
+            //Compute offsets and adjcny vectors
+            offsets_out[0] = 0;
+            auto it_b = diEdgeVector.begin();
 
-            it_b = it_e;   
+            for(VertexIdType i = 0; i < this->numVertices; i++)
+            {
+              //Range for adjacency list of vertex i
+              auto it_e = std::find_if(it_b, diEdgeVector.end(), [i](std::pair<VertexIdType, VertexIdType> &e) { return e.first > i; });
+
+              offsets_out[i+1] = std::distance(diEdgeVector.begin(), it_e);
+
+              for(auto it = it_b; it != it_e; it++)
+                adjcny_out.push_back(it->second);
+
+              it_b = it_e;   
+            }
           }
+
+          //for in-edges  
+          {
+            adjcny_in.reserve(this->numEdges);
+            offsets_in.resize(this->numVertices + 1);
+
+            //reverse the edge vector: <from, to> -> <to, from>
+            for(auto &e: diEdgeVector)
+              e = std::make_pair(e.second, e.first);
+
+            //Sort the edge vector before adding it into adjcny
+            std::sort(diEdgeVector.begin(), diEdgeVector.end());
+
+            //Compute offsets and adjcny vectors
+            offsets_in[0] = 0;
+            auto it_b = diEdgeVector.begin();
+
+            for(VertexIdType i = 0; i < this->numVertices; i++)
+            {
+              //Range for adjacency list of vertex i
+              auto it_e = std::find_if(it_b, diEdgeVector.end(), [i](std::pair<VertexIdType, VertexIdType> &e) { return e.first > i; });
+
+              offsets_in[i+1] = std::distance(diEdgeVector.begin(), it_e);
+
+              for(auto it = it_b; it != it_e; it++)
+                adjcny_in.push_back(it->second);
+
+              it_b = it_e;   
+            }
+          }
+
         }
 
         /**
@@ -153,7 +202,7 @@ namespace psgl
          * @details   Format details (assuming n = no. of vertices):
          *              Print n+1 rows in total
          *              First row: value of n and total count of edges
-         *              Subsequent rows contain out-neighbors of vertices and their DNA sequences,
+         *              Subsequent rows contain vertex id, OUT-neighbors of vertices and their DNA sequences,
          *              one row per vertex
          *            This function is implemented for debugging purpose
          */
@@ -163,8 +212,9 @@ namespace psgl
 
           for (VertexIdType i = 0; i < this->numVertices; i++)
           {
-            for (EdgeIdType j = offsets[i]; j < offsets[i+1]; j++)
-              std::cerr << adjcny[j] << " ";
+            std::cerr << "[" << i << "] ";
+            for (EdgeIdType j = offsets_out[i]; j < offsets_out[i+1]; j++)
+              std::cerr << adjcny_out[j] << " ";
 
             std::cerr << vertex_metadata[i] << "\n";
           }

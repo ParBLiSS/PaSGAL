@@ -7,6 +7,7 @@
 #include "clipp.h"
 #include "graphLoad.hpp"
 #include "graphLayout.hpp"
+#include "utils.hpp"
 
 int main(int argc, char **argv)
 {
@@ -35,7 +36,7 @@ int main(int argc, char **argv)
 
   {
     std::vector<uint32_t> order(g.diGraph.numVertices);
-    int runs = 20;
+    int runs = 10;
 
     psgl::topologicalSort(g.diGraph, runs, order); 
 
@@ -48,5 +49,9 @@ int main(int argc, char **argv)
     psgl::topologicalSort(g.diGraph, order); 
 
     std::cout << "INFO, psgl::main, topological sort [FIFO] computed, bandwidth = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
+  }
+
+  {
+    std::cout << "INFO, psgl::main, lower bound on bandwidth = " << psgl::lowerBoundBandwidth(g.diGraph) << std::endl;
   }
 }
