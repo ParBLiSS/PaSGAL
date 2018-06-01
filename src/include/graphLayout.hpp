@@ -20,9 +20,10 @@ namespace psgl
   
   /**
    * @brief                   compute topological sort order using Kahn's algorithm
+   *                          ties are decided using FIFO policy
    * @param[in]   graph       input graph in CSR format
-   * @param[out]  finalOrder  vertex ordering (vertex [0 - n-1] to position [0 - n-1] mapping, i.e.
-   *                          finalOrder[0] denotes where v_0 should go)
+   * @param[out]  finalOrder  vertex ordering (vertex [0 - n-1] to position [0 - n-1] 
+   *                          mapping, i.e. finalOrder[0] denotes where v_0 should go)
    */
   template <typename VertexIdType, typename EdgeIdType>  
     void topologicalSort( const CSR_container<VertexIdType, EdgeIdType> &graph, 
@@ -62,12 +63,13 @@ namespace psgl
     }
 
   /**
-   * @brief                   compute topological sort order using several random runs
+   * @brief                   compute topological sort order using several runs
    *                          of Kahn's algorithm
+   *                          ties are decided randomly
    * @param[in]   graph       input graph in CSR format
    * @param[in]   runs        count of random runs to execute
-   * @param[out]  finalOrder  vertex ordering (vertex [0 - n-1] to position [0 - n-1] mapping, i.e.
-   *                          finalOrder[0] denotes where v_0 should go)
+   * @param[out]  finalOrder  vertex ordering (vertex [0 - n-1] to position [0 - n-1] 
+   *                          mapping, i.e. finalOrder[0] denotes where v_0 should go)
    * @details                 ordering with least directed bandwidth is chosen 
    */
   template <typename VertexIdType, typename EdgeIdType>  
@@ -121,7 +123,7 @@ namespace psgl
         auto currentBandwidth = directedBandwidth(graph, tmpOrder);
 
 #ifdef DEBUG 
-        std::cout << "DEBUG, psgl::topologicalSort, Random run #" << i+1 << " , bandwidth = " << currentBandwidth << std::endl;
+        std::cerr << "DEBUG, psgl::topologicalSort, Random run #" << i+1 << " , bandwidth = " << currentBandwidth << std::endl;
 #endif
 
         if (minbandwidth > currentBandwidth)
@@ -136,8 +138,8 @@ namespace psgl
    * @brief                   compute maximum distance between connected vertices in the order (a.k.a. 
    *                          directed bandwidth), while noting that each node is a chain of characters
    * @param[in]   graph       input graph in CSR format
-   * @param[in]   finalOrder  vertex ordering (vertex to position [0 - n-1] mapping, i.e.
-   *                          finalOrder[0] denotes the position where v_0 should go)
+   * @param[in]   finalOrder  vertex ordering (vertex [0 - n-1] to position [0 - n-1] 
+   *                          mapping, i.e. finalOrder[0] denotes where v_0 should go)
    * @return                  directed graph bandwidth
    * @details                 output of this fn decides the maximum count of prior columns we need during DP 
    */
@@ -187,7 +189,7 @@ namespace psgl
       }
 
 #ifdef DEBUG
-      std::cout << "DEBUG, psgl::directedBandwidth, Bandwidth deciding positions = " << logFarthestPositions.first << ", " << logFarthestPositions.second << std::endl;
+      std::cerr << "DEBUG, psgl::directedBandwidth, Bandwidth deciding positions = " << logFarthestPositions.first << ", " << logFarthestPositions.second << std::endl;
 #endif
 
 #ifdef DEBUG
@@ -198,7 +200,7 @@ namespace psgl
     }
 
   /**
-   * @brief                   compute a lower bound for bandwidth (not necessarily tight)
+   * @brief                   compute a lower bound for bandwidth (loose bound)
    * @param[in]   graph       input graph in CSR format
    * @details                 lower bound is computed by checking in-neighbors 
    *                          and out-neighbors of each vertex
@@ -207,7 +209,11 @@ namespace psgl
   template <typename VertexIdType, typename EdgeIdType>
     std::size_t lowerBoundBandwidth(const CSR_container<VertexIdType, EdgeIdType> &graph)
     {
+      //lower bound
       std::size_t lbound = 0;
+
+      //vertex where bound is obtained
+      VertexIdType lbound_v;
 
       //based on out-neighbors
       {
@@ -223,7 +229,12 @@ namespace psgl
           }
 
           minimum_dist -= max_width; //subtract neighbor with max width
+
+          if(minimum_dist > lbound)
+            lbound_v = i;
+
           lbound = std::max(minimum_dist, lbound);
+
         }
       }
 
@@ -241,9 +252,49 @@ namespace psgl
           }
 
           minimum_dist -= max_width; //subtract neighbor with max width
+
+          if(minimum_dist > lbound)
+            lbound_v = i;
+
           lbound = std::max(minimum_dist, lbound);
         }
       }
+
+      //based on single insertion variation
+      {
+        for (VertexIdType i = 0; i < graph.numVertices; i++)
+        {
+          std::size_t minimum_dist = 1;   //since minimum width required is 1
+
+          if (graph.offsets_out[i+1] - graph.offsets_out[i] == 2)
+          {
+            auto j = graph.offsets_out[i];
+
+            //two neigbors of vertex i
+            auto u = graph.adjcny_out[j];
+            auto v = graph.adjcny_out[j + 1];
+
+            //edge from u -> v
+            if (graph.edgeExists(u,v))
+            {
+              minimum_dist += graph.vertex_metadata[u].length();
+            }
+            else if (graph.edgeExists(v,u))  //edge from v -> u
+            {
+              minimum_dist += graph.vertex_metadata[v].length();
+            }
+          }
+
+          if(minimum_dist > lbound)
+            lbound_v = i;
+
+          lbound = std::max(minimum_dist, lbound);
+        }
+      }
+
+#ifdef DEBUG
+      std::cerr << "DEBUG, psgl::lowerBoundBandwidth, lower bound obtained at vertex id = " << lbound_v << std::endl; 
+#endif
 
       return lbound;
     }
@@ -251,8 +302,8 @@ namespace psgl
   /**
    * @brief                   print all vertex sequences in their topological sorted order
    * @param[in]   graph       input graph in CSR format
-   * @param[in]   finalOrder  vertex ordering (vertex to position [0 - n-1] mapping, i.e.
-   *                          finalOrder[0] denotes the position where v_0 should go)
+   * @param[in]   finalOrder  vertex ordering (vertex [0 - n-1] to position [0 - n-1] 
+   *                          mapping, i.e. finalOrder[0] denotes where v_0 should go)
    */
   template <typename VertexIdType, typename EdgeIdType>
     VertexIdType printOrderedSequences( const CSR_container<VertexIdType, EdgeIdType> &graph, 
@@ -263,12 +314,12 @@ namespace psgl
       for(VertexIdType i = 0; i < graph.numVertices; i++)
         reverseOrder[ finalOrder[i] ] = i;
 
-      std::cout << "Complete order\n";
+      std::cerr << "DEBUG, psgl::printOrderedSequences, Complete order\n";
 
       for(auto &e: reverseOrder)
-        std::cout << "[v_id = " << e << "] " << graph.vertex_metadata[e]  <<  " -> \n";
+        std::cerr << "[v_id = " << e << "] " << graph.vertex_metadata[e]  <<  " -> \n";
 
-      std::cout << "End" << std::endl;
+      std::cerr << "DEBUG, psgl::printOrderedSequences, end" << std::endl;
     }
 
   /**
@@ -299,12 +350,12 @@ namespace psgl
       for(VertexIdType i = 0; i < graph.numVertices; i++)
         reverseOrder[ finalOrder[i] ] = i;
 
-      std::cout << "Partial order between vertices " << v_from << " and " << v_to << "\n";
+      std::cerr << "psgl::printOrderedSequences, partial order between vertices " << v_from << " and " << v_to << "\n";
 
       for(VertexIdType i = from_pos; i <= to_pos; i++)
-        std::cout << "[v_id = " << reverseOrder[i] << "] " << graph.vertex_metadata[ reverseOrder[i] ]  <<  " -> \n";
+        std::cerr << "[v_id = " << reverseOrder[i] << "] " << graph.vertex_metadata[ reverseOrder[i] ]  <<  " -> \n";
 
-      std::cout << "End" << std::endl;
+      std::cerr << "psgl::printOrderedSequences, end" << std::endl;
     }
 
 }

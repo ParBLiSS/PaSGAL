@@ -59,7 +59,7 @@ namespace psgl
         /**
          * @brief     sanity check for correctness of graph storage in CSR format
          */
-        void verify()
+        void verify() const
         {
           //sequences
           {
@@ -198,6 +198,28 @@ namespace psgl
         }
 
         /**
+         * @brief             check existence of edge from vertex u to v
+         * @param[in]   u     vertex id
+         * @param[in]   v     vertex id
+         * @return            true if edge exists, false otherwise
+         */
+        bool edgeExists(VertexIdType u, VertexIdType v) const
+        {
+          assert(u >= 0 && u < this->numVertices);
+          assert(v >= 0 && v < this->numVertices);
+
+          bool returnVal = false;
+
+          for (auto i = offsets_out[u]; i < offsets_out[u+1]; i++)
+          {
+            if ( v == adjcny_out[i] )
+              returnVal = true;
+          }
+
+          return returnVal;
+        }
+
+        /**
          * @brief     print the loaded directed graph to stderr 
          * @details   Format details (assuming n = no. of vertices):
          *              Print n+1 rows in total
@@ -206,9 +228,10 @@ namespace psgl
          *              one row per vertex
          *            This function is implemented for debugging purpose
          */
-        void printGraph()
+        void printGraph() const
         {
-          std::cerr << this->numVertices << " " << this->numEdges << "\n";
+          std::cerr << "DEBUG, psgl::CSR_container::printGraph, Printing complete graph" << std::endl;
+          std::cerr << this->numVertices << " " << this->numEdges << std::endl;
 
           for (VertexIdType i = 0; i < this->numVertices; i++)
           {
@@ -218,6 +241,8 @@ namespace psgl
 
             std::cerr << vertex_metadata[i] << "\n";
           }
+
+          std::cerr << "DEBUG, psgl::CSR_container::printGraph, Printing done" << std::endl;
         }
     };
 

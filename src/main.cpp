@@ -36,13 +36,12 @@ int main(int argc, char **argv)
 
   {
     std::vector<uint32_t> order(g.diGraph.numVertices);
-    int runs = 10;
+    const int runs = 5;
 
     psgl::topologicalSort(g.diGraph, runs, order); 
 
     std::cout << "INFO, psgl::main, topological sort [rand" << runs << "] computed, bandwidth = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
   }
-
 
   {
     std::vector<uint32_t> order(g.diGraph.numVertices);
