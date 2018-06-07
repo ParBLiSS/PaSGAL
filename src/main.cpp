@@ -6,7 +6,6 @@
 
 #include "clipp.h"
 #include "graphLoad.hpp"
-#include "graphLayout.hpp"
 #include "utils.hpp"
 
 int main(int argc, char **argv)
@@ -28,29 +27,10 @@ int main(int argc, char **argv)
   psgl::graphLoader<uint32_t, uint32_t> g;
   g.loadFromVG(infile);
 
-  std::cout << "INFO, psgl::main, graph loaded in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << std::endl;
+  std::cout << "INFO, psgl::main, graph ready in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << std::endl;
 
 #ifdef DEBUG
   g.printGraph();
 #endif
 
-  {
-    std::vector<uint32_t> order(g.diGraph.numVertices);
-    const int runs = 5;
-
-    psgl::topologicalSort(g.diGraph, runs, order); 
-
-    std::cout << "INFO, psgl::main, topological sort [rand" << runs << "] computed, bandwidth = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
-  }
-
-  {
-    std::vector<uint32_t> order(g.diGraph.numVertices);
-    psgl::topologicalSort(g.diGraph, order); 
-
-    std::cout << "INFO, psgl::main, topological sort [FIFO] computed, bandwidth = " << psgl::directedBandwidth(g.diGraph, order) << std::endl;
-  }
-
-  {
-    std::cout << "INFO, psgl::main, lower bound on bandwidth = " << psgl::lowerBoundBandwidth(g.diGraph) << std::endl;
-  }
 }

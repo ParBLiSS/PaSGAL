@@ -86,6 +86,9 @@ namespace psgl
             diGraph.initEdges(edgeVector);
           }
 
+          //Topological sort
+          diGraph.sort();
+
 #ifndef NDEBUG
           //verify correctness of CSR container
           diGraph.verify();
