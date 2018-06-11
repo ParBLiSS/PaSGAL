@@ -306,14 +306,33 @@ namespace psgl
             {
               std::vector<VertexIdType> adjcny_in_new;  
               std::vector<VertexIdType> adjcny_out_new;  
+
               
               for(VertexIdType i = 0; i < this->numVertices; i++)
+              {
+                std::vector<VertexIdType> tmp;
+
                 for(auto j = offsets_in[ rOrder[i] ]; j < offsets_in[ rOrder[i] + 1 ]; j++)
-                  adjcny_in_new.push_back( order[adjcny_in[j]] );
+                  tmp.push_back( order[adjcny_in[j]] );
+
+                //insert adjacency elements in sorted order
+                std::sort(tmp.begin(), tmp.end());
+
+                adjcny_in_new.insert(adjcny_in_new.end(), tmp.begin(), tmp.end());
+              }
 
               for(VertexIdType i = 0; i < this->numVertices; i++)
+              {
+                std::vector<VertexIdType> tmp;
+
                 for(auto j = offsets_out[ rOrder[i] ]; j < offsets_out[ rOrder[i] + 1 ]; j++)
-                  adjcny_out_new.push_back( order[adjcny_out[j]] );
+                  tmp.push_back( order[adjcny_out[j]] );
+
+                //insert adjacency elements in sorted order
+                std::sort(tmp.begin(), tmp.end());
+
+                adjcny_out_new.insert(adjcny_out_new.end(), tmp.begin(), tmp.end());
+              }
 
               adjcny_in = adjcny_in_new;
               adjcny_out = adjcny_out_new;
@@ -334,6 +353,81 @@ namespace psgl
               offsets_out = offsets_out_new;
             }
           }
+        }
+
+        /**
+         * @brief                   compute maximum distance between connected vertices in the graph (a.k.a. 
+         *                          directed bandwidth), while noting that each node is a chain of characters
+         * @return                  directed graph bandwidth
+         * @details                 output of this fn decides the maximum count of prior columns we need during DP 
+         */
+        std::size_t directedBandwidth() const
+        {
+          std::size_t bandwidth = 0;   //temporary value 
+
+          std::pair<VertexIdType, VertexIdType> logFarthestVertices;
+
+          //iterate over all vertices in graph to compute bandwidth
+          for(VertexIdType i = 0; i < this->numVertices; i++)
+          {
+            //iterate over neighbors of vertex i
+            for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
+            {
+              auto from_pos = i;
+              auto to_pos = adjcny_out[j];
+
+              //for a valid topological sort order
+              assert(to_pos > from_pos);
+
+              //now the bandwidth between vertex i and its neighbor equals
+              //(to_pos - from_pos) plus the width of intermediate vertices
+
+              std::size_t tmp_bandwidth = to_pos - from_pos;
+
+              for(auto k = from_pos + 1; k < to_pos; k++)
+                tmp_bandwidth += vertex_metadata[k].length() - 1;
+
+              if(tmp_bandwidth > bandwidth)
+              {
+                bandwidth = tmp_bandwidth;
+                logFarthestVertices = std::make_pair(i, adjcny_out[j]);
+              }
+            }
+          }
+
+#ifdef DEBUG
+          std::cerr << "DEBUG, psgl::CSR_container::directedBandwidth, Bandwidth deciding vertices = " << logFarthestVertices.first << ", " << logFarthestVertices.second << std::endl;
+#endif
+
+          return bandwidth;
+        }
+
+        /**
+         * @brief                   get all in-neighbor vertices of a vertex
+         * @param[in]   v
+         * @param[out]  vec
+         */
+        void getInNeighbors(VertexIdType v, std::vector<VertexIdType> &vec) const
+        {
+          assert(vec.size() == 0);
+          assert(v >= 0 && v < this->numVertices);
+
+          for(auto i = offsets_in[v]; i < offsets_in[v+1]; i++)
+            vec.push_back( adjcny_in[i] );
+        }
+
+        /**
+         * @brief                   get all out-neighbor vertices of a vertex
+         * @param[in]   v
+         * @param[out]  vec
+         */
+        void getOutNeighbors(VertexIdType v, std::vector<VertexIdType> &vec) const
+        {
+          assert(vec.size() == 0);
+          assert(v >= 0 && v < this->numVertices);
+
+          for(auto i = offsets_out[v]; i < offsets_out[v+1]; i++)
+            vec.push_back( adjcny_out[i] );
         }
 
       private:
@@ -459,53 +553,6 @@ namespace psgl
 
 #ifdef DEBUG
           std::cerr << "DEBUG, psgl::CSR_container::directedBandwidth, Bandwidth deciding positions = " << logFarthestPositions.first << ", " << logFarthestPositions.second << std::endl;
-#endif
-
-          return bandwidth;
-        }
-
-        /**
-         * @brief                   compute maximum distance between connected vertices in the graph (a.k.a. 
-         *                          directed bandwidth), while noting that each node is a chain of characters
-         * @return                  directed graph bandwidth
-         * @details                 output of this fn decides the maximum count of prior columns we need during DP 
-         */
-        std::size_t directedBandwidth() const
-        {
-          std::size_t bandwidth = 0;   //temporary value 
-
-          std::pair<VertexIdType, VertexIdType> logFarthestVertices;
-
-          //iterate over all vertices in graph to compute bandwidth
-          for(VertexIdType i = 0; i < this->numVertices; i++)
-          {
-            //iterate over neighbors of vertex i
-            for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
-            {
-              auto from_pos = i;
-              auto to_pos = adjcny_out[j];
-
-              //for a valid topological sort order
-              assert(to_pos > from_pos);
-
-              //now the bandwidth between vertex i and its neighbor equals
-              //(to_pos - from_pos) plus the width of intermediate vertices
-
-              std::size_t tmp_bandwidth = to_pos - from_pos;
-
-              for(auto k = from_pos + 1; k < to_pos; k++)
-                tmp_bandwidth += vertex_metadata[k].length() - 1;
-
-              if(tmp_bandwidth > bandwidth)
-              {
-                bandwidth = tmp_bandwidth;
-                logFarthestVertices = std::make_pair(i, adjcny_out[j]);
-              }
-            }
-          }
-
-#ifdef DEBUG
-          std::cerr << "DEBUG, psgl::CSR_container::directedBandwidth, Bandwidth deciding vertices = " << logFarthestVertices.first << ", " << logFarthestVertices.second << std::endl;
 #endif
 
           return bandwidth;
