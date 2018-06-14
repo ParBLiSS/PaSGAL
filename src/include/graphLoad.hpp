@@ -23,7 +23,7 @@ namespace psgl
    * @tparam[in]    VertexIdType  data type to store vertex ids (tbd by total #vertices)
    * @tparam[in]    EdgeIdType    data type to store offsets in CSR graph (tbd by total #edges)
    */
-  template <typename VertexIdType, typename EdgeIdType>
+  template <typename VertexIdType = uint32_t, typename EdgeIdType = uint32_t>
     class graphLoader
     {
       public:

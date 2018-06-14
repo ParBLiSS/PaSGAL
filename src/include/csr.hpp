@@ -27,6 +27,13 @@ namespace psgl
    *              - Adjacency (out/in) list of vertex i is stored in array 
    *                'adjcny_' starting at index offsets_[i] and 
    *                ending at (but not including) index offsets_[i+1]
+   *
+   *            - Procedure to create CSR_container
+   *              addVertexCount() : specify # vertices
+   *              initVertexSequence() : specify all vertex sequences
+   *              initEdges() : specify edges
+   *              sort() : topological sort
+   *              verify() : verify correctness of graph
    */
   template <typename VertexIdType, typename EdgeIdType>
     class CSR_container
@@ -40,6 +47,9 @@ namespace psgl
         //contiguous adjacency list of all vertices, size = numEdges
         std::vector<VertexIdType> adjcny_in;  
         std::vector<VertexIdType> adjcny_out;  
+
+        //cumulative prefix sequence length till any vertex, size = numVertices
+        std::vector<std::size_t> cumulativeSeqLength;
 
         //offsets in adjacency list for each vertex, size = numVertices + 1
         std::vector<EdgeIdType> offsets_in;
@@ -62,6 +72,9 @@ namespace psgl
          */
         void verify() const
         {
+          assert(this->numVertices > 0);
+          assert(this->numEdges > 0);
+
           //sequences
           {
             assert(vertex_metadata.size() == this->numVertices);
@@ -96,15 +109,22 @@ namespace psgl
             assert(std::is_sorted(offsets_in.begin(), offsets_in.end()));
             assert(std::is_sorted(offsets_out.begin(), offsets_out.end()));
 
-            assert(offsets_in.back() == this->numEdges);
-            assert(offsets_out.back() == this->numEdges);
+            assert(offsets_in.front() == 0 && offsets_in.back() == this->numEdges);
+            assert(offsets_out.front() == 0 && offsets_out.back() == this->numEdges);
           }
 
-          //sorted order
+          //topologically sorted order
           {
             for(VertexIdType i = 0; i < this->numVertices; i++)
               for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
                 assert( i < adjcny_out[j] );
+          }
+
+          //prefix sequence lengths
+          {
+            for(VertexIdType i = 1; i < this->numVertices; i++)
+              assert( cumulativeSeqLength[i] > cumulativeSeqLength[i-1] );
+            assert( cumulativeSeqLength[ this->numVertices - 1 ] == this->totalRefLength() );
           }
         }
 
@@ -118,6 +138,7 @@ namespace psgl
 
           this->numVertices += n;
           this->vertex_metadata.resize(this->numVertices);
+          this->cumulativeSeqLength.resize(this->numVertices);
         }
 
         /**
@@ -272,6 +293,29 @@ namespace psgl
         }
 
         /**
+         * @brief     total reference sequence length between 
+         *            vertices v1 and V2 (both inclusive) in the sorted order
+         * @return    the length
+         */
+        std::size_t totalRefLength (VertexIdType v1, VertexIdType v2) const
+        {
+          assert(v1 >= 0 && v1 < this->numVertices);
+          assert(v2 >= 0 && v2 < this->numVertices);
+          assert(v1 <= v2);
+
+          std::size_t totalLen = 0;
+
+          for (auto i = v1; i <= v2; i++)
+          {
+            assert(vertex_metadata[i].length() > 0);
+
+            totalLen += vertex_metadata[i].length();
+          }
+
+          return totalLen;
+        }
+
+        /**
          * @brief     relabel graph vertices in the topologically sorted order
          */
         void sort()
@@ -352,6 +396,15 @@ namespace psgl
               offsets_in  = offsets_in_new;
               offsets_out = offsets_out_new;
             }
+
+          }
+
+          //compute prefix sequence length
+          this->cumulativeSeqLength[0] = vertex_metadata[0].length();
+
+          for(VertexIdType i = 1; i < this->numVertices; i++)
+          {
+            cumulativeSeqLength[i] = cumulativeSeqLength[i-1] + vertex_metadata[i].length();
           }
         }
 
@@ -428,6 +481,69 @@ namespace psgl
 
           for(auto i = offsets_out[v]; i < offsets_out[v+1]; i++)
             vec.push_back( adjcny_out[i] );
+        }
+
+        /**
+         * @brief                   get prefix sequence sum offsets for all in-neighbor vertices
+         * @param[in]   v
+         * @param[out]  vec
+         * @details                 useful during DP execution- to access left neighboring reference 
+         *                          cells
+         */
+        void getInSeqOffsets(VertexIdType v, std::vector<std::size_t> &vec) const
+        {
+          assert(vec.size() == 0);
+          assert(v >= 0 && v < this->numVertices);
+
+          for(auto i = offsets_in[v]; i < offsets_in[v+1]; i++)
+            vec.push_back( cumulativeSeqLength[adjcny_in[i]] - 1 );
+        }
+
+        /**
+         * @brief             compute farthest reachable vertex on left side
+         *                    while accounting for length of vertex sequences
+         * @param[in]   v     id of starting vertex (where alignment ends)
+         * @param[in]   dist  alignment length bound
+         * @details           useful to determining traceback range in DP
+         * TODO               make the bound more precise
+         */
+        VertexIdType computeLeftMostReachableVertex(VertexIdType v, std::size_t dist) const
+        {
+          assert(v >= 0 && v < this->numVertices);
+
+          //trivial case
+          if (v == 0)
+            return 0;
+
+          //Initialize a distance vector for vertices {0, 1,... , v-1, v}
+          std::vector<std::size_t> distvec(v+1, dist);
+
+          //Initialize distance of starting vertex
+          distvec[v] = 0;
+
+          //Traverse vertices in reverse of topological sorted order
+          for (VertexIdType i = v; i != (VertexIdType) -1; i--)
+          {
+            //Update in-neigbors of vertex i
+            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+            {
+              assert( adjcny_in[j] < i );
+
+              if (i == v)
+                distvec[ adjcny_in[j] ] = 1;      //immediate neighbors of v are just one unit away
+              else
+                distvec[ adjcny_in[j] ] = std::min( distvec[ adjcny_in[j] ] , distvec[i] + vertex_metadata[i].length() );
+            }
+          }
+
+          //Check the leftmost vertex inside dist
+          for (VertexIdType i = 0; i <= v; i++)
+          {
+            if (distvec[i] < dist)
+              return i;
+          }
+
+          return 0;
         }
 
       private:

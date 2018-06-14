@@ -30,16 +30,35 @@ namespace psgl
       public:
 
         /**
-         * @brief     public constructor
+         * @brief             public constructor
+         * @param[in]   g
          */
         graphIter(const CSR_container<VertexIdType, EdgeIdType> &g) :
           graph(g)
         {
-          assert(graph.numVertices > 0);
-
           this->currentVid = 0;
           this->seqOffset = 0;
           this->globalOffset = 0;
+        }
+
+       /**
+         * @brief             public constructor
+         *                    begin iterator from a given vertex id
+         * @param[in]   g
+         * @param[in]   v
+         */
+        graphIter(const CSR_container<VertexIdType, EdgeIdType> &g, VertexIdType v) :
+          graph(g)
+        {
+          assert(v >= 0 && v < graph.numVertices);
+
+          this->currentVid = v;
+          this->seqOffset = 0;
+
+          if(v == 0)
+            this->globalOffset = 0;
+          else
+            this->globalOffset = graph.cumulativeSeqLength[v-1];
         }
 
         /**
@@ -47,6 +66,7 @@ namespace psgl
          */
         char curChar() const
         {
+          assert(this->currentVid >= 0 && this->currentVid < graph.numVertices);
           assert(this->seqOffset >= 0);
           assert(this->seqOffset < graph.vertex_metadata[currentVid].length());
 
@@ -85,18 +105,7 @@ namespace psgl
           }
           else
           {
-            std::vector<VertexIdType> inVertices;
-            graph.getInNeighbors(currentVid, inVertices);
-
-            for(auto i = inVertices.begin(); i != inVertices.end(); i++)
-            {
-              std::size_t off = 1;
-              
-              for(auto j = *i + 1; j < currentVid; j++)
-                off += graph.vertex_metadata[j].length();
-
-              offsets.push_back( this->globalOffset - off);
-            }
+            graph.getInSeqOffsets(currentVid, offsets);
           }
         }
 
@@ -111,9 +120,25 @@ namespace psgl
         /**
          * @brief     return global character offset in ordered graph
          */
-        std::size_t getGlobalOffset()
+        std::size_t getGlobalOffset() const
         {
           return this->globalOffset;
+        }
+
+        /**
+         * @brief     return current vertex id
+         */
+        VertexIdType getCurrentVertexId() const
+        {
+          return this->currentVid;
+        }
+
+        /**
+         * @brief     return current sequence offset
+         */
+        std::size_t getCurrentSeqOffset()
+        {
+          return this->seqOffset;
         }
     };
 }

@@ -15,12 +15,12 @@ namespace psgl
    */
   struct SCORE
   {
-    static const int match = 1;
+    static const int8_t match = 1;
 
     //penalties
-    static const int mismatch = 1;
-    static const int ins = 1;
-    static const int del = 1;
+    static const int8_t mismatch = 1;
+    static const int8_t ins = 1;
+    static const int8_t del = 1;
   };
 
   /**
@@ -32,7 +32,6 @@ namespace psgl
     LOCAL,
     SEMIGLOBAL
   };  
-
 }
 
 #endif
