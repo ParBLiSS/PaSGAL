@@ -40,6 +40,34 @@ namespace psgl
         return select(start, end, gen);
       }
   }
+
+  namespace seqUtils
+  {
+    /**
+     * @brief                     string compaction, e.g. replace ..MMMMM.. with ..5M..
+     * @param[in/out]     cigar   the cigar string
+     */
+    void cigarCompact (std::string &cigar)
+    {
+      std::string cigarCpy = cigar;
+
+      cigar.clear();
+
+      for (auto it = cigarCpy.begin(); it != cigarCpy.end(); )
+      {
+        char current = *it;
+
+        auto it2 = std::find_if (it, cigarCpy.end(), [&](const char &c) { return c != current; });
+
+        std::size_t numeric = std::distance (it , it2);
+        cigar.append (std::to_string( numeric ));
+        cigar.push_back ( *it );
+
+        it = it2;
+      }
+    }
+  }
+
 }
 
 #endif

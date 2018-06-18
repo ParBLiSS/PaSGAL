@@ -12,10 +12,11 @@
 
 int main(int argc, char **argv)
 {
-  std::string infile = "";
+  std::string rfile = "", qfile = "";
 
   auto cli = (
-      clipp::required("-i") & clipp::value("input file", infile)
+      clipp::required("-r") & clipp::value(".vg reference graph file", rfile),
+      clipp::required("-q") & clipp::value("an input query file (fasta/fastq)[.gz]", qfile)
       );
 
   if(!clipp::parse(argc, argv, cli)) 
@@ -24,19 +25,17 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  std::cout << "INFO, psgl::main, input file = " << infile << std::endl;
+  std::cout << "INFO, psgl::main, reference file = " << rfile << std::endl;
+  std::cout << "INFO, psgl::main, query file = " << qfile << std::endl;
 
   psgl::graphLoader<> g;
-  g.loadFromVG(infile);
+  g.loadFromVG(rfile);
 
   std::cout << "INFO, psgl::main, graph ready in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << std::endl;
-
-  std::vector<std::string> reads = {"AGGAAAGGTTAAAAAAAGTAAAAGGAACTCGGCAAATTACCCCGCCTGTTTACCAAAAACATCACCTCTAGCAT"};
   
-  psgl::alignToDAG<int>(reads, g.diGraph, psgl::MODE::LOCAL);  
+  psgl::alignToDAG<int>(qfile, g.diGraph, psgl::MODE::LOCAL);  
 
 #ifdef DEBUG
   g.printGraph();
 #endif
-
 }
