@@ -4,11 +4,11 @@
  */
 #include <iostream>
 
-#include "clipp.h"
 #include "graphLoad.hpp"
 #include "align.hpp"
 #include "utils.hpp"
 #include "base_types.hpp"
+#include "clipp.h"
 
 int main(int argc, char **argv)
 {
@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
   if(!clipp::parse(argc, argv, cli)) 
   {
-    std::cout << clipp::make_man_page(cli, argv[0]);
+    //std::cout << clipp::make_man_page(cli, argv[0]);
     exit(1);
   }
 

@@ -35,9 +35,16 @@ namespace psgl
       //width of score matrix that we need in memory
       auto width = graph.totalRefLength();
 
+      int readCounter = 1;
+
       //iterate over reads
       for (auto &read : reads)
       {
+
+//#ifdef DEBUG
+        std::cout << "INFO, psgl::alignToDAGLocal, aligning read #" << readCounter++ << ", length = " << read.length() << std::endl;
+//#endif
+
         //
         // PHASE 1 : COMPUTE COMPLETE DP MATRIX
         //
@@ -62,7 +69,7 @@ namespace psgl
               std::size_t j = g.getGlobalOffset();
 
               //insertion edit
-              ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::del;
+              ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
 
               //get preceeding dependency offsets from graph
               std::vector<std::size_t> preceedingOffsets;
@@ -81,7 +88,7 @@ namespace psgl
               ScoreType fromDeletion = -1; 
               for(auto k : preceedingOffsets)
               {
-                fromDeletion = std::max (fromDeletion, matrix[i % 2][k] - SCORE::ins);
+                fromDeletion = std::max (fromDeletion, matrix[i % 2][k] - SCORE::del);
               }
 
               //Evaluate recursion 
@@ -99,7 +106,9 @@ namespace psgl
             }
           }
 
-          std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", with alignment ending at vertex id = " << best.vid << std::endl;
+//#ifdef DEBUG
+          std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", ending at vertex id = " << best.vid << ", DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
+//#endif
         }   
 
         //
@@ -157,7 +166,7 @@ namespace psgl
               char curChar = g.curChar();
 
               //insertion edit
-              ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::del;
+              ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
 
               //get preceeding dependency offsets from graph
               std::vector<std::size_t> preceedingOffsets;
@@ -169,14 +178,16 @@ namespace psgl
               ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
               for(auto k : preceedingOffsets)
               {
-                fromMatch = std::max (fromMatch, matrix[(i-1) % 2][k-j0] + matchScore);
+                if (k >= j0)
+                  fromMatch = std::max (fromMatch, matrix[(i-1) % 2][k-j0] + matchScore);
               }
 
               //deletion edit
               ScoreType fromDeletion  = -1; 
               for(auto k : preceedingOffsets)
               {
-                fromDeletion = std::max (fromDeletion, matrix[i % 2][k-j0] - SCORE::ins);
+                if (k >= j0)
+                  fromDeletion = std::max (fromDeletion, matrix[i % 2][k-j0] - SCORE::del);
               }
 
               //evaluate current score
@@ -193,13 +204,7 @@ namespace psgl
             if (i == reducedHeight - 1) 
               finalRow = matrix[i % 2];
           }
-        }
 
-        //
-        // PHASE 3.1 : VERIFY CORRECTNESS OF RE-COMPUTE
-        //
-
-        {
           ScoreType bestScoreReComputed = *std::max_element(finalRow.begin(), finalRow.end());
 
           //the recomputed score and its location should match our original calculation
@@ -221,14 +226,12 @@ namespace psgl
           std::vector<ScoreType> currentRowScores = finalRow; 
           std::vector<ScoreType> aboveRowScores (reducedWidth);
 
-          std::size_t col = g.getGlobalOffset() - j0;
-          std::size_t row = best.qryRow;
+          int col = g.getGlobalOffset() - j0;
+          int row = best.qryRow;
 
-          while (col >= 0)
+          while (col >= 0 && row >= 0)
           {
-            col = g.getGlobalOffset() - j0;
-
-            if (currentRowScores[col] == 0)
+            if (currentRowScores[col] <= 0)
               break;
 
             //retrieve score values from vertical score differences
@@ -239,7 +242,7 @@ namespace psgl
             char curChar = g.curChar();
 
             //insertion edit
-            ScoreType fromInsertion = aboveRowScores[col] - SCORE::del;
+            ScoreType fromInsertion = aboveRowScores[col] - SCORE::ins;
 
             //get preceeding dependency offsets from graph
             std::vector<std::size_t> preceedingOffsets;
@@ -249,11 +252,11 @@ namespace psgl
             ScoreType matchScore = curChar == read[row] ? SCORE::match : -1 * SCORE::mismatch;
 
             ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
-            std::size_t fromMatchPos = col;
+            std::size_t fromMatchPos = g.getGlobalOffset();
 
             for(auto k : preceedingOffsets)
             {
-              if (fromMatch < aboveRowScores[k-j0] + matchScore)
+              if (k >= j0 && fromMatch < aboveRowScores[k-j0] + matchScore)
               {
                 fromMatch = aboveRowScores[k-j0] + matchScore;
                 fromMatchPos = k;
@@ -266,9 +269,9 @@ namespace psgl
 
             for(auto k : preceedingOffsets)
             {
-              if (fromDeletion <  currentRowScores[k-j0] - SCORE::ins)
+              if (k >= j0 && fromDeletion <  currentRowScores[k-j0] - SCORE::del)
               {
-                fromDeletion = currentRowScores[k-j0] - SCORE::ins;
+                fromDeletion = currentRowScores[k-j0] - SCORE::del;
                 fromDeletionPos = k;
               }
             }
@@ -277,7 +280,14 @@ namespace psgl
             {
               if (currentRowScores[col] == fromMatch)
               {
-                cigar.push_back('M');
+                if (matchScore == SCORE::match)
+                  cigar.push_back('=');
+                else
+                  cigar.push_back('X');
+
+                //if alignment starts from this column, stop
+                if (fromMatchPos == g.getGlobalOffset())
+                  break;
 
                 //shift to preceeding offset
                 g.jump(fromMatchPos);
@@ -302,6 +312,8 @@ namespace psgl
                 row--; currentRowScores = aboveRowScores;
               }
             }
+
+            col = g.getGlobalOffset() - j0;
           }
 
           //string reverse 
@@ -309,10 +321,13 @@ namespace psgl
 
           //shorten the cigar string
           psgl::seqUtils::cigarCompact(cigar);
-          
-          std::cout << "INFO, psgl::alignToDAGLocal, cigar = " << cigar << std::endl;
-        }
 
+          std::cout << "INFO, psgl::alignToDAGLocal, cigar: " << cigar << std::endl;
+
+          //validate if cigar yields best score
+          assert ( psgl::seqUtils::cigarScore<ScoreType> (cigar) ==  best.score );
+          
+        }
       }
     }
 

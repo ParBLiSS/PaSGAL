@@ -7,8 +7,11 @@
 #ifndef PSGL_UTILS_HPP
 #define PSGL_UTILS_HPP
 
-#include  <random>
-#include  <iterator>
+#include <random>
+#include <iterator>
+#include <algorithm>
+
+#include "base_types.hpp"
 
 namespace psgl
 {
@@ -66,8 +69,48 @@ namespace psgl
         it = it2;
       }
     }
-  }
 
+    /**
+     * @brief                 compute alignment score from cigar string
+     * @param[in]     cigar   the cigar string
+     */
+    template <typename ScoreType>
+      ScoreType cigarScore (const std::string &cigar)
+      {
+        if (cigar.empty()) 
+          return 0;
+
+        ScoreType score = 0;
+        int currentNumeric = 0;
+
+        for(int i = 0; i < cigar.length(); i++)
+        {
+          char c = cigar.at(i);
+
+          if ( isdigit(c) )
+          {
+            currentNumeric = (currentNumeric * 10) + (c - '0');
+          }
+          else 
+          {
+            assert (c == '=' || c == 'X' || c == 'I' || c == 'D');
+
+            if ( c == '=' )
+              score += SCORE::match * currentNumeric;
+            else if ( c == 'X')
+              score -= SCORE::mismatch * currentNumeric;
+            else if (c == 'I')
+              score -= SCORE::ins * currentNumeric;
+            else  // c == 'D'
+              score -= SCORE::del * currentNumeric;
+
+            currentNumeric = 0;
+          }
+        }
+
+        return score;
+      }
+  }
 }
 
 #endif

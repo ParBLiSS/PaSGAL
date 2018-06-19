@@ -12,6 +12,7 @@ namespace psgl
 
   /**
    * @brief     scores
+   * @details   assume edits wrt. reference sequence
    */
   struct SCORE
   {
