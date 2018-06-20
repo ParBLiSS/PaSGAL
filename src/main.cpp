@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
   if(!clipp::parse(argc, argv, cli)) 
   {
-    //std::cout << clipp::make_man_page(cli, argv[0]);
+    clipp::print ( clipp::make_man_page(cli, argv[0]) );
     exit(1);
   }
 
@@ -31,7 +31,7 @@ int main(int argc, char **argv)
   psgl::graphLoader<> g;
   g.loadFromVG(rfile);
 
-  std::cout << "INFO, psgl::main, graph ready in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << std::endl;
+  std::cout << "INFO, psgl::main, graph ready in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << ", len = " << g.diGraph.totalRefLength() << std::endl;
   
   psgl::alignToDAG<int>(qfile, g.diGraph, psgl::MODE::LOCAL);  
 

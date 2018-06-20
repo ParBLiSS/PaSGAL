@@ -16,6 +16,7 @@
 
 //External includes
 #include "kseq.h"
+#include "prettyprint.hpp"
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -118,8 +119,8 @@ namespace psgl
         VertexIdType leftMostReachable;
 
         {
-          //assume that there is atmost 10% deletion error rate
-          std::size_t maxDistance = read.length() + std::ceil( read.length() * 1.0/10 );
+          //TODO: Re-think on this threshold
+          std::size_t maxDistance = read.length() + std::ceil( read.length() * 1.0 * SCORE::match/SCORE::del );
           leftMostReachable = graph.computeLeftMostReachableVertex(best.vid, maxDistance);  
 
 #ifdef DEBUG
@@ -326,7 +327,6 @@ namespace psgl
 
           //validate if cigar yields best score
           assert ( psgl::seqUtils::cigarScore<ScoreType> (cigar) ==  best.score );
-          
         }
       }
     }
@@ -395,11 +395,6 @@ namespace psgl
       std::vector<std::string> reads;
 
       {
-
-//#ifdef DEBUG
-        std::cout << "INFO, psgl::alignToDAG, aligning reads of file " << qfile << std::endl;
-//#endif
-
         //Open the file using kseq
         FILE *file = fopen (qfile.c_str(), "r");
         gzFile fp = gzdopen (fileno(file), "r");

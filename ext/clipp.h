@@ -6271,6 +6271,25 @@ operator << (OStream& os, const man_page& man)
 }
 
 
+/*************************************************************************//**
+ *
+ * @brief   generates man page based on command line parameters
+ * @note    implemented to prevent conflict with prettyprint
+ *
+ *****************************************************************************/
+void print (const man_page& man)
+{
+    bool first = true;
+    const auto secSpc = doc_string(man.section_row_spacing() + 1, '\n');
+    for(const auto& section : man) {
+        if(!section.content().empty()) {
+            if(first) first = false; else std::cout << secSpc;
+            if(!section.title().empty()) std::cout << section.title() << '\n';
+            std::cout << section.content();
+        }
+    }
+    std::cout << '\n';
+}
 
 
 
