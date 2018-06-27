@@ -33,84 +33,59 @@ namespace psgl
     void alignToDAGLocal( const std::vector<std::string> &reads,
         const CSR_container<VertexIdType, EdgeIdType> &graph)
     {
-      //width of score matrix that we need in memory
-      auto width = graph.totalRefLength();
 
       int readCounter = 1;
 
       //iterate over reads
-      for (auto &read : reads)
+      for (auto read : reads)
       {
 
 //#ifdef DEBUG
         std::cout << "INFO, psgl::alignToDAGLocal, aligning read #" << readCounter++ << ", length = " << read.length() << std::endl;
 //#endif
+        float time_p1, time_p2, time_p3, time_p4;
 
         //
         // PHASE 1 : COMPUTE COMPLETE DP MATRIX
         //
 
-        BestScoreInfo<ScoreType, VertexIdType> best;
+        BestScoreInfo<ScoreType, VertexIdType> bestFwd;
+        BestScoreInfo<ScoreType, VertexIdType> bestRev;
+
+        std::string read_revComp (read);
+        psgl::seqUtils::reverseComplement( read, read_revComp); 
 
         {
-          //initialize matrix of size 2 x width, init with zero
-          //we will keep re-using rows to keep memory-usage low
-          std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(width, 0));
+          auto tick1 = psgl::timer::rdtsc();
 
-          //iterate over characters in read
-          for (std::size_t i = 0; i < read.length(); i++)
-          {
-            //iterate over characters in reference graph
-            for (graphIterFwd <VertexIdType, EdgeIdType> g(graph); !g.end(); g.next())
-            {
-              //current reference character
-              char curChar = g.curChar();
+          //align read to ref.
+          alignToDAGLocal_Phase1_Score (read, graph, bestFwd);
 
-              //current column number in DP matrix
-              std::size_t j = g.getGlobalOffset();
+          //align reverse complement of read to ref.
+          alignToDAGLocal_Phase1_Score (read_revComp, graph, bestRev);
 
-              //insertion edit
-              ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
+          auto tick2 = psgl::timer::rdtsc();
+          time_p1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+        }
 
-              //get preceeding dependency offsets from graph
-              std::vector<std::size_t> preceedingOffsets;
-              g.getNeighborOffsets(preceedingOffsets);
+        BestScoreInfo<ScoreType, VertexIdType> &best = bestFwd;
 
-              //match-mismatch edit
-              ScoreType matchScore = curChar == read[i] ? SCORE::match : -1 * SCORE::mismatch;
-
-              ScoreType fromMatch = matchScore;   //local alignment can also start with a match at this char
-              for(auto k : preceedingOffsets)
-              {
-                fromMatch = std::max (fromMatch, matrix[(i-1) % 2][k] + matchScore);
-              }
-
-              //deletion edit
-              ScoreType fromDeletion = -1; 
-              for(auto k : preceedingOffsets)
-              {
-                fromDeletion = std::max (fromDeletion, matrix[i % 2][k] - SCORE::del);
-              }
-
-              //Evaluate recursion 
-              matrix[i % 2][j] = std::max ( std::max(fromInsertion, fromMatch) , std::max(fromDeletion, 0) );
-
-              //Update best score observed till now
-              if (best.score < matrix[i % 2][j])
-              {
-                best.score = matrix[i % 2][j];
-                best.vid = g.getCurrentVertexId();
-                best.vertexSeqOffset = g.getCurrentSeqOffset();
-                best.refColumn = j;
-                best.qryRow = i;
-              }
-            }
-          }
+        if (bestFwd.score > bestRev.score)
+        {
+          best = bestFwd;
+          best.strand = '+';
+        }
+        else
+        {
+          best = bestRev;
+          best.strand = '-';
+          read = read_revComp; 
+        }
 
 //#ifdef DEBUG
-          std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", ending at vertex id = " << best.vid << ", DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
+        std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", strand = " << best.strand << ", ending at vertex id = " << best.vid << ", DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
 //#endif
-        }   
+
 
         //
         // PHASE 2 : COMPUTE FARTHEST REACHABLE VERTEX 
@@ -119,13 +94,17 @@ namespace psgl
         VertexIdType leftMostReachable;
 
         {
-          //TODO: Re-think on this threshold
+          auto tick1 = psgl::timer::rdtsc();
+
           std::size_t maxDistance = read.length() + std::ceil( read.length() * 1.0 * SCORE::match/SCORE::del );
           leftMostReachable = graph.computeLeftMostReachableVertex(best.vid, maxDistance);  
 
 #ifdef DEBUG
           std::cout << "INFO, psgl::alignToDAGLocal, left most reachable vertex id = " << leftMostReachable << std::endl;
 #endif
+
+          auto tick2 = psgl::timer::rdtsc();
+          time_p2 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
 
         //
@@ -150,6 +129,8 @@ namespace psgl
         std::vector< std::vector<int8_t> > completeMatrixLog(reducedHeight, std::vector<int8_t>(reducedWidth, 0));
 
         {
+          auto tick1 = psgl::timer::rdtsc();
+
           //scoring matrix of size 2 x width, init with zero
           std::vector<std::vector<ScoreType>> matrix(2, std::vector<ScoreType>(reducedWidth, 0));
 
@@ -211,6 +192,9 @@ namespace psgl
           //the recomputed score and its location should match our original calculation
           assert( bestScoreReComputed == best.score );
           assert( bestScoreReComputed == finalRow[ best.refColumn - j0 ] );
+
+          auto tick2 = psgl::timer::rdtsc();
+          time_p3 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
 
         //
@@ -220,6 +204,8 @@ namespace psgl
         std::string cigar;
 
         {
+          auto tick1 = psgl::timer::rdtsc();
+
           //iterate over graph in reverse direction
           //we shall move from bottom (best scoring cell) to up
           graphIterRev <VertexIdType, EdgeIdType> g(graph, best);
@@ -327,32 +313,84 @@ namespace psgl
 
           //validate if cigar yields best score
           assert ( psgl::seqUtils::cigarScore<ScoreType> (cigar) ==  best.score );
+
+          auto tick2 = psgl::timer::rdtsc();
+          time_p4 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
+
+        std::cout << "TIMER, psgl::alignToDAGLocal, phase timings (sec) : " << time_p1 << ", " << time_p2 << ", " << time_p3 << ", " << time_p4 << std::endl;
       }
     }
 
   /**
-   * @brief                   global alignment routine
+   * @brief                   local alignment routine
    * @tparam[in]  ScoreType   type to store scores in DP matrix
-   * @param[in]   reads
+   * @param[in]   read
+   * @param[in]   readLength
    * @param[in]   graph
+   * @param[out]  best        value and location of best score
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGGlobal( const std::vector<std::string> &reads,
-                          const CSR_container<VertexIdType, EdgeIdType> &graph)
+    void alignToDAGLocal_Phase1_Score(  const std::string &read,
+                                        const CSR_container<VertexIdType, EdgeIdType> &graph,
+                                        BestScoreInfo<ScoreType, VertexIdType> &best)
     {
-    }
+      //width of score matrix that we need in memory
+      auto width = graph.totalRefLength();
 
-  /**
-   * @brief                   semi-global alignment routine
-   * @tparam[in]  ScoreType   type to store scores in DP matrix
-   * @param[in]   reads
-   * @param[in]   graph
-   */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGSemiGlobal( const std::vector<std::string> &reads,
-        const CSR_container<VertexIdType, EdgeIdType> &graph)
-    {
+      //initialize matrix of size 2 x width, init with zero
+      //we will keep re-using rows to keep memory-usage low
+      std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(width, 0));
+
+      //iterate over characters in read
+      for (std::size_t i = 0; i < read.length(); i++)
+      {
+        //iterate over characters in reference graph
+        for (graphIterFwd <VertexIdType, EdgeIdType> g(graph); !g.end(); g.next())
+        {
+          //current reference character
+          char curChar = g.curChar();
+
+          //current column number in DP matrix
+          std::size_t j = g.getGlobalOffset();
+
+          //insertion edit
+          ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
+
+          //get preceeding dependency offsets from graph
+          std::vector<std::size_t> preceedingOffsets;
+          g.getNeighborOffsets(preceedingOffsets);
+
+          //match-mismatch edit
+          ScoreType matchScore = curChar == read[i] ? SCORE::match : -1 * SCORE::mismatch;
+
+          ScoreType fromMatch = matchScore;   //local alignment can also start with a match at this char
+          for(auto k : preceedingOffsets)
+          {
+            fromMatch = std::max (fromMatch, matrix[(i-1) % 2][k] + matchScore);
+          }
+
+          //deletion edit
+          ScoreType fromDeletion = -1; 
+          for(auto k : preceedingOffsets)
+          {
+            fromDeletion = std::max (fromDeletion, matrix[i % 2][k] - SCORE::del);
+          }
+
+          //Evaluate recursion 
+          matrix[i % 2][j] = std::max ( std::max(fromInsertion, fromMatch) , std::max(fromDeletion, 0) );
+
+          //Update best score observed till now
+          if (best.score < matrix[i % 2][j])
+          {
+            best.score = matrix[i % 2][j];
+            best.vid = g.getCurrentVertexId();
+            best.vertexSeqOffset = g.getCurrentSeqOffset();
+            best.refColumn = j;
+            best.qryRow = i;
+          }
+        }
+      }
     }
 
   /**
@@ -372,9 +410,9 @@ namespace psgl
 
       switch(mode)
       {
-        case GLOBAL : alignToDAGGlobal<ScoreType> (reads, graph); break;
+        //case GLOBAL : alignToDAGGlobal<ScoreType> (reads, graph); break;
         case LOCAL : alignToDAGLocal<ScoreType> (reads, graph); break;
-        case SEMIGLOBAL: alignToDAGSemiGlobal<ScoreType> (reads, graph); break;
+        //case SEMIGLOBAL: alignToDAGSemiGlobal<ScoreType> (reads, graph); break;
         default: std::cerr << "ERROR, psgl::alignToDAG, Invalid alignment mode"; exit(1);
       }
     }
@@ -405,6 +443,8 @@ namespace psgl
 
         while ((len = kseq_read(seq)) >= 0) 
         {
+          psgl::seqUtils::makeUpperCase(seq->seq.s, len);
+
           reads.push_back(seq->seq.s);
         }
 

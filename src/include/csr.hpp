@@ -80,7 +80,14 @@ namespace psgl
             assert(vertex_metadata.size() == this->numVertices);
 
             for(auto &seq : vertex_metadata)
+            {
+              //should be non-empty
               assert(seq.length() > 0);
+
+              //all characters should be upper case
+              for(auto &c : seq)
+                assert(std::isupper(c));
+            }
           }
 
           //adjacency list

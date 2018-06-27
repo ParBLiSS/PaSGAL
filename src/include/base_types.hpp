@@ -52,6 +52,8 @@ namespace psgl
       std::size_t refColumn;
       std::size_t qryRow;
 
+      char strand; // '+' or '-'
+
       /**
        * @brief   constructor
        */

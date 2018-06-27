@@ -10,6 +10,8 @@
 #include <random>
 #include <iterator>
 #include <algorithm>
+#include <thread>
+#include <chrono>
 
 #include "base_types.hpp"
 
@@ -46,6 +48,49 @@ namespace psgl
 
   namespace seqUtils
   {
+    /**
+     * @brief   reverse complement of string
+     * @note    assumes dest is pre-allocated
+     */
+    void reverseComplement(const std::string &src, std::string &dest) 
+    {
+      assert(src.length() == dest.length());
+
+      for ( int i = 0; i < src.length(); i++ )
+      {    
+        char base = src.at(i);
+
+        assert(std::isupper(base));
+
+        switch ( base )
+        {    
+          case 'A': base = 'T'; break;
+          case 'C': base = 'G'; break;
+          case 'G': base = 'C'; break;
+          case 'T': base = 'A'; break;
+          default: break;
+        }    
+
+        dest[src.length() - i - 1] = base;
+      }    
+    }
+
+    /**
+     * @brief               convert DNA or AA alphabets to upper case
+     * @param[in]   seq     pointer to input sequence
+     * @param[in]   len     length of input sequence
+     */
+    void makeUpperCase(char* seq, std::size_t len)
+    {
+      for ( int i = 0; i < len; i++ )
+      {
+        if (seq[i] > 96 && seq[i] < 123)
+        {
+          seq[i] -= 32;
+        }
+      }
+    }
+
     /**
      * @brief                     string compaction, e.g. replace ..MMMMM.. with ..5M..
      * @param[in/out]     cigar   the cigar string
@@ -110,6 +155,32 @@ namespace psgl
 
         return score;
       }
+  }
+
+  namespace timer
+  {
+    /**
+     * @brief  get CPU cycle count
+     */
+    uint64_t rdtsc()
+    {
+      return __rdtsc();
+    }
+
+    /**
+     * @brief   return count of CPU cycles per second
+     */
+    uint64_t cycles_per_sec()
+    {
+      uint64_t tick1 = rdtsc();
+
+      //sleep for a second
+      std::this_thread::sleep_for (std::chrono::seconds(1));
+
+      uint64_t tick2 = rdtsc();
+
+      return tick2 - tick1;
+    }
   }
 }
 
