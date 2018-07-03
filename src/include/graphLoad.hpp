@@ -10,6 +10,7 @@
 #include <cassert>
 #include <iostream>
 
+
 //Own includes
 #include "csr.hpp"
 #include "stream.hpp"
@@ -32,11 +33,18 @@ namespace psgl
         CSR_container<VertexIdType, EdgeIdType> diGraph;
 
         /**
-         * @brief     load graph from VG graph format
-         * @details   VG tool (https://github.com/vgteam/vg) uses .vg format to save graphs
+         * @brief                 load graph from VG graph format
+         * @param[in]  filename
+         * @details               VG tool (https://github.com/vgteam/vg) uses .vg format to save graphs
          */
         void loadFromVG(const std::string &filename)
         {
+          if(!exists(filename))
+          {
+            std::cerr << filename << " not accessible." << std::endl;
+            exit(1);
+          }
+
           //Read vertices in the graph 
           {
             std::ifstream graphFile {filename, std::ios::in | std::ios::binary};
@@ -86,6 +94,87 @@ namespace psgl
             diGraph.initEdges(edgeVector);
           }
 
+          //topological sort
+          this->sortVerify();
+        }
+
+        /**
+         *  @brief                  load graph from .txt file
+         *  @param[in]  filename
+         *  @details                file format: 
+         *                          first line specifies count of vertices
+         *                          following lines specify out-neighbors and label 
+         *                          for each vertex delimited by spaces (one vertex per line)
+         */
+        void loadFromTxt(const std::string &filename)
+        {
+          if(!exists(filename))
+          {
+            std::cerr << filename << " not accessible." << std::endl;
+            exit(1);
+          }
+
+          std::string line;
+          std::ifstream infile(filename);
+
+          VertexIdType totalVertices;
+          std::vector <std::pair <VertexIdType, VertexIdType> > edgeVector;
+
+          int currentRow = 0;
+
+          while (std::getline(infile, line))
+          {
+            std::istringstream inputString(line);
+
+            //get count of vertices from header row
+            if (currentRow == 0)
+            {
+              inputString >> totalVertices;
+              diGraph.addVertexCount(totalVertices);
+            }
+            else //get out-neighbor vertex ids and vertex label
+            {
+              assert(currentRow <= totalVertices);
+
+              //Parse the input line
+              std::vector<std::string> tokens (std::istream_iterator<std::string>{inputString}, std::istream_iterator<std::string>());
+              assert(tokens.size() > 0);
+
+              diGraph.initVertexSequence (currentRow - 1, tokens.back());
+
+              for (auto it = tokens.begin(); it != tokens.end() && std::next(it) != tokens.end(); it++)
+              {
+                edgeVector.emplace_back (currentRow - 1, stoi(*it));
+              }
+            }
+
+            currentRow++;
+          }
+
+          diGraph.initEdges(edgeVector);
+
+          assert (diGraph.numVertices > 0);
+          assert (diGraph.numEdges > 0);
+
+          //topological sort
+          this->sortVerify();
+        }
+
+        /**
+         * @brief     print the loaded directed graph to stderr 
+         */
+        void printGraph() const
+        {
+          diGraph.printGraph();
+        }
+
+      private:
+
+        /**
+         * @brief   topologically sort the graph and verify correctness
+         */
+        void sortVerify()
+        {
           //Topological sort
           diGraph.sort();
 
@@ -96,11 +185,12 @@ namespace psgl
         }
 
         /**
-         * @brief     print the loaded directed graph to stderr 
+         * @brief     check if file is accessible
          */
-        void printGraph()
+        bool exists(const std::string &filename) const
         {
-          diGraph.printGraph();
+          std::ifstream infile(filename);
+          return infile.good();
         }
     };
 

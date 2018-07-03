@@ -86,7 +86,10 @@ namespace psgl
 
               //all characters should be upper case
               for(auto &c : seq)
+              {
                 assert(std::isupper(c));
+                assert(c == 'A' || c == 'T' || c == 'G' || c == 'C' || c == 'N');
+              }
             }
           }
 
@@ -259,19 +262,18 @@ namespace psgl
          * @brief     print the loaded directed graph to stderr 
          * @details   Format details (assuming n = no. of vertices):
          *              Print n+1 rows in total
-         *              First row: value of n and total count of edges
-         *              Subsequent rows contain vertex id, OUT-neighbors of vertices and their DNA sequences,
+         *              First row: value of n 
+         *              Subsequent rows contain OUT-neighbors of vertices and their DNA sequences,
          *              one row per vertex
          *            This function is implemented for debugging purpose
          */
         void printGraph() const
         {
           std::cerr << "DEBUG, psgl::CSR_container::printGraph, Printing complete graph" << std::endl;
-          std::cerr << this->numVertices << " " << this->numEdges << std::endl;
+          std::cerr << this->numVertices << std::endl;
 
           for (VertexIdType i = 0; i < this->numVertices; i++)
           {
-            std::cerr << "[" << i << "] ";
             for (EdgeIdType j = offsets_out[i]; j < offsets_out[i+1]; j++)
               std::cerr << adjcny_out[j] << " ";
 
