@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 2.6)
 
+# compile using intel compiler 
+# users can remove these two lines to compile with gcc
+set(CMAKE_CXX_COMPILER "icc")
+set(CMAKE_C_COMPILER "icc")
+
 # project settings
 project(PaSGAL)
 
 ##### General Compilation Settings
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++11")
+set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS} --std=c++11")
 
 #set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
@@ -18,6 +23,9 @@ IF(NOT CMAKE_BUILD_TYPE)
     FORCE)
 ENDIF(NOT CMAKE_BUILD_TYPE)
 
+#Set vtune support
+OPTION(ENABLE_VTUNE "Turn on/off the vtune support with intel compiler" OFF)
+
 find_package(OpenMP)
 if (OPENMP_FOUND)
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -27,12 +35,20 @@ endif()
 
 #Configure Protobuf (path needs to be configured by each user)
 #TODO: automate generation of protobuf cpp file
-set(PROTOBUF_INCLUDE_DIRS "/projects/PCL-GBB/chirag/software/protobuf/build/include")
-set(PROTOBUF_LIBRARY "/projects/PCL-GBB/chirag/software/protobuf/build/lib/libprotobuf.so")
+set(PROTOBUF_INCLUDE_DIRS "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/include")
+set(PROTOBUF_LIBRARY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/lib/libprotobuf.so")
 
 include_directories("${PROJECT_SOURCE_DIR}/ext")
 include_directories("${PROJECT_SOURCE_DIR}/src/include")
 include_directories(${PROTOBUF_INCLUDE_DIRS})
 
+#### For vtune support
+if(ENABLE_VTUNE)
+  include_directories("/opt/intel/vtune_amplifier_2018/include")
+  set(VTUNE_LIBRARY "/opt/intel/vtune_amplifier_2018/lib64/libittnotify.a")
+  add_definitions(-DVTUNE_SUPPORT)
+endif(ENABLE_VTUNE)
+
+
 add_executable(PaSGAL "${PROJECT_SOURCE_DIR}/src/main.cpp" "${PROJECT_SOURCE_DIR}/src/vg.pb.cc")
-target_link_libraries(PaSGAL ${PROTOBUF_LIBRARY} -lz -lpthread)
+target_link_libraries(PaSGAL ${PROTOBUF_LIBRARY} ${VTUNE_LIBRARY} -lz -lpthread)

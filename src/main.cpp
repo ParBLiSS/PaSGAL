@@ -4,6 +4,11 @@
  */
 #include <iostream>
 
+
+#ifdef VTUNE_SUPPORT
+#include <ittnotify.h>
+#endif
+
 #include "graphLoad.hpp"
 #include "align.hpp"
 #include "utils.hpp"
@@ -12,6 +17,10 @@
 
 int main(int argc, char **argv)
 {
+#ifdef VTUNE_SUPPORT
+  __itt_pause();
+#endif
+
   std::string rfile = "", qfile = "", mode = "";
 
   auto cli = (
@@ -42,8 +51,16 @@ int main(int argc, char **argv)
   }
 
   std::cout << "INFO, psgl::main, graph ready in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << ", len = " << g.diGraph.totalRefLength() << std::endl;
+
+#ifdef VTUNE_SUPPORT
+  __itt_resume();
+#endif
   
   psgl::alignToDAG<int>(qfile, g.diGraph, psgl::MODE::LOCAL);  
+
+#ifdef VTUNE_SUPPORT
+  __itt_pause();
+#endif
 
 #ifdef DEBUG
   g.printGraph();
