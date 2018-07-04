@@ -34,15 +34,12 @@ namespace psgl
         const CSR_container<VertexIdType, EdgeIdType> &graph)
     {
 
-      int readCounter = 1;
-
       //iterate over reads
-      for (auto read : reads)
+#pragma omp parallel for
+      for (size_t readno = 0; readno < reads.size(); readno++)
       {
+        std::string read = reads[readno];
 
-//#ifdef DEBUG
-        std::cout << "INFO, psgl::alignToDAGLocal, aligning read #" << readCounter++ << ", length = " << read.length() << std::endl;
-//#endif
         float time_p1, time_p2, time_p3, time_p4;
 
         //
@@ -81,11 +78,6 @@ namespace psgl
           best.strand = '-';
           read = read_revComp; 
         }
-
-//#ifdef DEBUG
-        std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", strand = " << best.strand << ", ending at vertex id = " << best.vid << ", DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
-//#endif
-
 
         //
         // PHASE 2 : COMPUTE FARTHEST REACHABLE VERTEX 
@@ -309,8 +301,6 @@ namespace psgl
           //shorten the cigar string
           psgl::seqUtils::cigarCompact(cigar);
 
-          std::cout << "INFO, psgl::alignToDAGLocal, cigar: " << cigar << std::endl;
-
           //validate if cigar yields best score
           assert ( psgl::seqUtils::cigarScore<ScoreType> (cigar) ==  best.score );
 
@@ -318,7 +308,13 @@ namespace psgl
           time_p4 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
 
-        std::cout << "TIMER, psgl::alignToDAGLocal, phase timings (sec) : " << time_p1 << ", " << time_p2 << ", " << time_p3 << ", " << time_p4 << std::endl;
+#pragma omp critical 
+        {
+          std::cout << "INFO, psgl::alignToDAGLocal, aligning read #" << readno + 1 << ", length = " << read.length() << std::endl;
+          std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", strand = " << best.strand << ", ending at vertex id = " << best.vid << ", DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
+          std::cout << "INFO, psgl::alignToDAGLocal, cigar: " << cigar << std::endl;
+          std::cout << "TIMER, psgl::alignToDAGLocal, phase timings (sec) : " << time_p1 << ", " << time_p2 << ", " << time_p3 << ", " << time_p4 << std::endl;
+        }
       }
     }
 
