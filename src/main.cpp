@@ -52,15 +52,7 @@ int main(int argc, char **argv)
 
   std::cout << "INFO, psgl::main, graph ready in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << ", len = " << g.diGraph.totalRefLength() << std::endl;
 
-#ifdef VTUNE_SUPPORT
-  __itt_resume();
-#endif
-  
-  psgl::alignToDAG<int>(qfile, g.diGraph, psgl::MODE::LOCAL);  
-
-#ifdef VTUNE_SUPPORT
-  __itt_pause();
-#endif
+  psgl::alignToDAG<int>(qfile, g.diCharGraph, psgl::MODE::LOCAL);  
 
 #ifdef DEBUG
   g.printGraph();

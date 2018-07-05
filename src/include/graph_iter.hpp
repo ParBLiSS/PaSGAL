@@ -103,7 +103,7 @@ namespace psgl
          * @param[out]    offsets   
          * @details                 offsets start from 0 to total reference sequence length
          */
-        void getNeighborOffsets(std::vector<std::size_t> &offsets) const
+        void getNeighborOffsets(std::vector<VertexIdType> &offsets) const
         {
           assert(offsets.size() == 0);
 
@@ -233,7 +233,7 @@ namespace psgl
          * @param[out]    offsets   
          * @details                 offsets start from 0 to total reference sequence length
          */
-        void getNeighborOffsets(std::vector<std::size_t> &offsets) const
+        void getNeighborOffsets(std::vector<VertexIdType> &offsets) const
         {
           assert(offsets.size() == 0);
 

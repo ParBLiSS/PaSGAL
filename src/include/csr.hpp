@@ -49,7 +49,7 @@ namespace psgl
         std::vector<VertexIdType> adjcny_out;  
 
         //cumulative prefix sequence length till any vertex, size = numVertices
-        std::vector<std::size_t> cumulativeSeqLength;
+        std::vector<VertexIdType> cumulativeSeqLength;
 
         //offsets in adjacency list for each vertex, size = numVertices + 1
         std::vector<EdgeIdType> offsets_in;
@@ -499,7 +499,7 @@ namespace psgl
          * @details                 useful during DP execution- to access left neighboring reference 
          *                          cells
          */
-        void getInSeqOffsets(VertexIdType v, std::vector<std::size_t> &vec) const
+        void getInSeqOffsets(VertexIdType v, std::vector<VertexIdType> &vec) const
         {
           assert(vec.size() == 0);
           assert(v >= 0 && v < this->numVertices);

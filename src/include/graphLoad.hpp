@@ -13,6 +13,7 @@
 
 //Own includes
 #include "csr.hpp"
+#include "csr_char.hpp"
 #include "stream.hpp"
 #include "vg.pb.h"
 
@@ -29,8 +30,11 @@ namespace psgl
     {
       public:
 
-        //initialize an empty di-graph 
+        //initialize an empty sequence labeled di-graph 
         CSR_container<VertexIdType, EdgeIdType> diGraph;
+
+        //initialize an empty character labeled di-graph
+        CSR_char_container<VertexIdType, EdgeIdType> diCharGraph;
 
         /**
          * @brief                 load graph from VG graph format
@@ -95,7 +99,10 @@ namespace psgl
           }
 
           //topological sort
-          this->sortVerify();
+          this->sortAndVerify();
+
+          //build character-labeled graph 
+          diCharGraph.build(this->diGraph);
         }
 
         /**
@@ -157,7 +164,10 @@ namespace psgl
           assert (diGraph.numEdges > 0);
 
           //topological sort
-          this->sortVerify();
+          this->sortAndVerify();
+
+          //build character-labeled graph 
+          diCharGraph.build(this->diGraph);
         }
 
         /**
@@ -173,7 +183,7 @@ namespace psgl
         /**
          * @brief   topologically sort the graph and verify correctness
          */
-        void sortVerify()
+        void sortAndVerify()
         {
           //Topological sort
           diGraph.sort();

@@ -44,10 +44,6 @@ namespace psgl
       //score value
       ScoreType score;
 
-      //vertex id and sequence offset within where optimal alignment ends
-      VertexIdType vid;
-      std::size_t vertexSeqOffset;
-
       //positioning in complete DP matrix where optimal alignment ends
       std::size_t refColumn;
       std::size_t qryRow;

@@ -9,7 +9,7 @@
 #define GRAPH_ALIGN_HPP
 
 #include "graphLoad.hpp"
-#include "csr.hpp"
+#include "csr_char.hpp"
 #include "graph_iter.hpp"
 #include "base_types.hpp"
 #include "utils.hpp"
@@ -22,18 +22,16 @@ KSEQ_INIT(gzFile, gzread)
 
 namespace psgl
 {
-
   /**
    * @brief                   local alignment routine
    * @tparam[in]  ScoreType   type to store scores in DP matrix
    * @param[in]   reads
-   * @param[in]   graph
+   * @param[in]   graph       node-labeled directed graph 
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
     void alignToDAGLocal( const std::vector<std::string> &reads,
-        const CSR_container<VertexIdType, EdgeIdType> &graph)
+        const CSR_char_container<VertexIdType, EdgeIdType> &graph)
     {
-
       //iterate over reads
 #pragma omp parallel for
       for (size_t readno = 0; readno < reads.size(); readno++)
@@ -52,6 +50,10 @@ namespace psgl
         std::string read_revComp (read);
         psgl::seqUtils::reverseComplement( read, read_revComp); 
 
+#ifdef VTUNE_SUPPORT
+  __itt_resume();
+#endif
+
         {
           auto tick1 = psgl::timer::rdtsc();
 
@@ -64,6 +66,10 @@ namespace psgl
           auto tick2 = psgl::timer::rdtsc();
           time_p1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
+
+#ifdef VTUNE_SUPPORT
+  __itt_pause();
+#endif
 
         BestScoreInfo<ScoreType, VertexIdType> &best = bestFwd;
 
@@ -89,7 +95,7 @@ namespace psgl
           auto tick1 = psgl::timer::rdtsc();
 
           std::size_t maxDistance = read.length() + std::ceil( read.length() * 1.0 * SCORE::match/SCORE::del );
-          leftMostReachable = graph.computeLeftMostReachableVertex(best.vid, maxDistance);  
+          leftMostReachable = graph.computeLeftMostReachableVertex(best.refColumn, maxDistance);  
 
 #ifdef DEBUG
           std::cout << "INFO, psgl::alignToDAGLocal, left most reachable vertex id = " << leftMostReachable << std::endl;
@@ -104,10 +110,10 @@ namespace psgl
         //
 
         //width of score matrix that we need in memory
-        std::size_t reducedWidth = graph.totalRefLength(leftMostReachable, best.vid);
+        std::size_t reducedWidth = best.refColumn - leftMostReachable + 1;
 
         //for new beginning column
-        std::size_t j0; 
+        std::size_t j0 = leftMostReachable; 
 
         //height of scoring matrix for re-computation
         std::size_t reducedHeight = best.qryRow + 1;   //i.e. row id ass. with best score -- plus one 
@@ -129,39 +135,30 @@ namespace psgl
           //iterate over characters in read
           for (std::size_t i = 0; i < reducedHeight; i++)
           {
-            //Iterate over reference graph, starting from 'leftMostReachable' vertex
-            graphIterFwd <VertexIdType, EdgeIdType> g(graph, leftMostReachable);
-            j0 = g.getGlobalOffset();   //beginning column
-
             //iterate over characters in reference graph
             for (std::size_t j = 0; j < reducedWidth; j++)
             {
               //current reference character
-              char curChar = g.curChar();
+              char curChar = graph.vertex_label[j + j0];
 
               //insertion edit
               ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
 
-              //get preceeding dependency offsets from graph
-              std::vector<std::size_t> preceedingOffsets;
-              g.getNeighborOffsets(preceedingOffsets);
-
               //match-mismatch edit
               ScoreType matchScore = curChar == read[i] ? SCORE::match : -1 * SCORE::mismatch;
-
               ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
-              for(auto k : preceedingOffsets)
-              {
-                if (k >= j0)
-                  fromMatch = std::max (fromMatch, matrix[(i-1) % 2][k-j0] + matchScore);
-              }
 
               //deletion edit
               ScoreType fromDeletion  = -1; 
-              for(auto k : preceedingOffsets)
+
+              for(auto k = graph.offsets_in[j + j0]; k < graph.offsets_in[j + j0 + 1]; k++)
               {
-                if (k >= j0)
-                  fromDeletion = std::max (fromDeletion, matrix[i % 2][k-j0] - SCORE::del);
+                //ignore edges outside range 
+                if ( graph.adjcny_in[k] >= j0)
+                {
+                  fromMatch = std::max (fromMatch, matrix[(i-1) % 2][ graph.adjcny_in[k] - j0] + matchScore);
+                  fromDeletion = std::max (fromDeletion, matrix[i % 2][ graph.adjcny_in[k] - j0] - SCORE::del);
+                }
               }
 
               //evaluate current score
@@ -170,8 +167,6 @@ namespace psgl
               //save vertical difference of scores, used later for backtracking
               completeMatrixLog[i][j] = matrix[i % 2][j] - matrix[(i-1) % 2][j];
 
-              //advance graph iterator
-              g.next();
             }
 
             //Save last row
@@ -198,14 +193,10 @@ namespace psgl
         {
           auto tick1 = psgl::timer::rdtsc();
 
-          //iterate over graph in reverse direction
-          //we shall move from bottom (best scoring cell) to up
-          graphIterRev <VertexIdType, EdgeIdType> g(graph, best);
-
           std::vector<ScoreType> currentRowScores = finalRow; 
           std::vector<ScoreType> aboveRowScores (reducedWidth);
 
-          int col = g.getGlobalOffset() - j0;
+          int col = reducedWidth - 1;
           int row = best.qryRow;
 
           while (col >= 0 && row >= 0)
@@ -218,40 +209,38 @@ namespace psgl
               aboveRowScores[i] = currentRowScores[i] - completeMatrixLog[row][i]; 
 
             //current reference character
-            char curChar = g.curChar();
+            char curChar = graph.vertex_label[col + j0];
 
             //insertion edit
             ScoreType fromInsertion = aboveRowScores[col] - SCORE::ins;
-
-            //get preceeding dependency offsets from graph
-            std::vector<std::size_t> preceedingOffsets;
-            g.getNeighborOffsets(preceedingOffsets);
 
             //match-mismatch edit
             ScoreType matchScore = curChar == read[row] ? SCORE::match : -1 * SCORE::mismatch;
 
             ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
-            std::size_t fromMatchPos = g.getGlobalOffset();
-
-            for(auto k : preceedingOffsets)
-            {
-              if (k >= j0 && fromMatch < aboveRowScores[k-j0] + matchScore)
-              {
-                fromMatch = aboveRowScores[k-j0] + matchScore;
-                fromMatchPos = k;
-              }
-            }
+            std::size_t fromMatchPos = col;
 
             //deletion edit
             ScoreType fromDeletion = -1; 
             std::size_t fromDeletionPos;
 
-            for(auto k : preceedingOffsets)
+            for(auto k = graph.offsets_in[col + j0]; k < graph.offsets_in[col + j0 + 1]; k++)
             {
-              if (k >= j0 && fromDeletion <  currentRowScores[k-j0] - SCORE::del)
+              if ( graph.adjcny_in[k] >= j0)
               {
-                fromDeletion = currentRowScores[k-j0] - SCORE::del;
-                fromDeletionPos = k;
+                auto fromCol = graph.adjcny_in[k] - j0;
+
+                if (fromMatch < aboveRowScores[fromCol] + matchScore)
+                {
+                  fromMatch = aboveRowScores[fromCol] + matchScore;
+                  fromMatchPos = fromCol;
+                }
+
+                if (fromDeletion < currentRowScores[fromCol] - SCORE::del)
+                {
+                  fromDeletion = currentRowScores[fromCol] - SCORE::del;
+                  fromDeletionPos = fromCol;
+                }
               }
             }
 
@@ -265,11 +254,11 @@ namespace psgl
                   cigar.push_back('X');
 
                 //if alignment starts from this column, stop
-                if (fromMatchPos == g.getGlobalOffset())
+                if (fromMatchPos == col)
                   break;
 
-                //shift to preceeding offset
-                g.jump(fromMatchPos);
+                //shift to preceeding column
+                col = fromMatchPos;
 
                 //shift to above row
                 row--; currentRowScores = aboveRowScores;
@@ -278,8 +267,8 @@ namespace psgl
               {
                 cigar.push_back('D');
 
-                //shift to preceeding offset
-                g.jump(fromDeletionPos);
+                //shift to preceeding column
+                col = fromDeletionPos;
               }
               else 
               {
@@ -291,8 +280,6 @@ namespace psgl
                 row--; currentRowScores = aboveRowScores;
               }
             }
-
-            col = g.getGlobalOffset() - j0;
           }
 
           //string reverse 
@@ -311,7 +298,7 @@ namespace psgl
 #pragma omp critical 
         {
           std::cout << "INFO, psgl::alignToDAGLocal, aligning read #" << readno + 1 << ", length = " << read.length() << std::endl;
-          std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", strand = " << best.strand << ", ending at vertex id = " << best.vid << ", DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
+          std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", strand = " << best.strand << ", ending at DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
           std::cout << "INFO, psgl::alignToDAGLocal, cigar: " << cigar << std::endl;
           std::cout << "TIMER, psgl::alignToDAGLocal, phase timings (sec) : " << time_p1 << ", " << time_p2 << ", " << time_p3 << ", " << time_p4 << std::endl;
         }
@@ -328,49 +315,36 @@ namespace psgl
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
     void alignToDAGLocal_Phase1_Score(  const std::string &read,
-                                        const CSR_container<VertexIdType, EdgeIdType> &graph,
+                                        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
                                         BestScoreInfo<ScoreType, VertexIdType> &best)
     {
-      //width of score matrix that we need in memory
-      auto width = graph.totalRefLength();
-
       //initialize matrix of size 2 x width, init with zero
       //we will keep re-using rows to keep memory-usage low
-      std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(width, 0));
+      std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(graph.numVertices, 0));
 
       //iterate over characters in read
       for (std::size_t i = 0; i < read.length(); i++)
       {
         //iterate over characters in reference graph
-        for (graphIterFwd <VertexIdType, EdgeIdType> g(graph); !g.end(); g.next())
+        for (std::size_t j = 0; j < graph.numVertices; j++)
         {
           //current reference character
-          char curChar = g.curChar();
-
-          //current column number in DP matrix
-          std::size_t j = g.getGlobalOffset();
+          char curChar = graph.vertex_label[j];
 
           //insertion edit
           ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
 
-          //get preceeding dependency offsets from graph
-          std::vector<std::size_t> preceedingOffsets;
-          g.getNeighborOffsets(preceedingOffsets);
-
           //match-mismatch edit
           ScoreType matchScore = curChar == read[i] ? SCORE::match : -1 * SCORE::mismatch;
-
           ScoreType fromMatch = matchScore;   //local alignment can also start with a match at this char
-          for(auto k : preceedingOffsets)
-          {
-            fromMatch = std::max (fromMatch, matrix[(i-1) % 2][k] + matchScore);
-          }
 
           //deletion edit
           ScoreType fromDeletion = -1; 
-          for(auto k : preceedingOffsets)
+
+          for(auto k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
           {
-            fromDeletion = std::max (fromDeletion, matrix[i % 2][k] - SCORE::del);
+            fromMatch = std::max (fromMatch, matrix[(i-1) % 2][ graph.adjcny_in[k] ] + matchScore);
+            fromDeletion = std::max (fromDeletion, matrix[i % 2][ graph.adjcny_in[k] ] - SCORE::del);
           }
 
           //Evaluate recursion 
@@ -380,8 +354,6 @@ namespace psgl
           if (best.score < matrix[i % 2][j])
           {
             best.score = matrix[i % 2][j];
-            best.vid = g.getCurrentVertexId();
-            best.vertexSeqOffset = g.getCurrentSeqOffset();
             best.refColumn = j;
             best.qryRow = i;
           }
@@ -398,7 +370,7 @@ namespace psgl
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
     void alignToDAG(const std::vector<std::string> &reads, 
-        const CSR_container<VertexIdType, EdgeIdType> &graph,
+        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
         const MODE mode)  
     {
       static_assert(std::is_signed<ScoreType>::value, 
@@ -422,7 +394,7 @@ namespace psgl
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
     void alignToDAG(const std::string &qfile, 
-        const CSR_container<VertexIdType, EdgeIdType> &graph,
+        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
         const MODE mode)  
     {
       //Parse all reads into a vector
