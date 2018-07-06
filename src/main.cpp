@@ -50,8 +50,6 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  std::cout << "INFO, psgl::main, graph ready in CSR format, n = " << g.diGraph.numVertices << ", m = " << g.diGraph.numEdges << ", len = " << g.diGraph.totalRefLength() << std::endl;
-
   psgl::alignToDAG<int>(qfile, g.diCharGraph, psgl::MODE::LOCAL);  
 
 #ifdef DEBUG

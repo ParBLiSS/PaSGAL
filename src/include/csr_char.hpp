@@ -94,6 +94,8 @@ namespace psgl
 #ifndef NDEBUG
           this->verify();
 #endif
+
+          std::cout << "INFO, psgl::CSR_char_container::build, graph converted to CSR format with character labels, n = " << this->numVertices << ", m = " << this->numEdges << std::endl;
         }
 
         /**

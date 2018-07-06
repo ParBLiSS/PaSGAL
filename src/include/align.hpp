@@ -33,7 +33,9 @@ namespace psgl
         const CSR_char_container<VertexIdType, EdgeIdType> &graph)
     {
       //iterate over reads
+#ifndef VTUNE_SUPPORT
 #pragma omp parallel for
+#endif
       for (size_t readno = 0; readno < reads.size(); readno++)
       {
         std::string read = reads[readno];
