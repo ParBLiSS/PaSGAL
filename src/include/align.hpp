@@ -20,75 +20,139 @@
 
 KSEQ_INIT(gzFile, gzread)
 
+#define psgl_max(a,b) (((a)>(b))?(a):(b))
+
 namespace psgl
 {
   /**
-   * @brief                   local alignment routine
-   * @tparam[in]  ScoreType   type to store scores in DP matrix
-   * @param[in]   reads
-   * @param[in]   graph       node-labeled directed graph 
+   * @brief                         execute first phase of alignment i.e. compute DP and 
+   *                                find locations of the best alignment of each read
+   * @tparam[in]  ScoreType         type to store scores in DP matrix
+   * @param[in]   readSet           vector of input query sequences to align
+   * @param[in]   readLength
+   * @param[in]   graph
+   * @param[out]  bestScoreVector   vector to keep value and location of best scores,
+   *                                vector size is same as count of the reads
+   * @note                          reverse complement of the read is not handled here
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGLocal( const std::vector<std::string> &reads,
-        const CSR_char_container<VertexIdType, EdgeIdType> &graph)
+    void alignToDAGLocal_Phase1(  const std::vector<std::string> &readSet,
+                                  const CSR_char_container<VertexIdType, EdgeIdType> &graph,
+                                  std::vector< BestScoreInfo<ScoreType, VertexIdType> > &bestScoreVector)
     {
-      //iterate over reads
-#ifndef VTUNE_SUPPORT
-#pragma omp parallel for
-#endif
-      for (size_t readno = 0; readno < reads.size(); readno++)
-      {
-        std::string read = reads[readno];
-
-        float time_p1, time_p2, time_p3, time_p4;
-
-        //
-        // PHASE 1 : COMPUTE COMPLETE DP MATRIX
-        //
-
-        BestScoreInfo<ScoreType, VertexIdType> bestFwd;
-        BestScoreInfo<ScoreType, VertexIdType> bestRev;
-
-        std::string read_revComp (read);
-        psgl::seqUtils::reverseComplement( read, read_revComp); 
+      assert (bestScoreVector.size() == readSet.size());
 
 #ifdef VTUNE_SUPPORT
-  __itt_resume();
+      __itt_resume();
 #endif
 
+#pragma omp parallel
+      {
+
+        //initialize matrix of size 2 x width, init with zero
+        //we will keep re-using rows to keep memory-usage low
+        std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(graph.numVertices, 0));
+
+#pragma omp for
+        for (size_t readno = 0; readno < readSet.size(); readno++)
         {
+          //reset buffer
+          std::fill(matrix[1].begin(), matrix[1].end(), 0);
+
+          //for time profiling within phase 1
           auto tick1 = psgl::timer::rdtsc();
 
-          //align read to ref.
-          alignToDAGLocal_Phase1_Score (read, graph, bestFwd);
+          auto readLength = readSet[readno].length();
 
-          //align reverse complement of read to ref.
-          alignToDAGLocal_Phase1_Score (read_revComp, graph, bestRev);
+          //iterate over characters in read
+          for (std::size_t i = 0; i < readLength; i++)
+          {
+            //iterate over characters in reference graph
+            for (std::size_t j = 0; j < graph.numVertices; j++)
+            {
+              //current reference character
+              char curChar = graph.vertex_label[j];
+
+              //insertion edit
+              ScoreType fromInsertion = matrix[(i-1) & 1][j] - SCORE::ins;
+              //'& 1' is same as doing modulo 2
+
+              //match-mismatch edit
+              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : -1 * SCORE::mismatch;
+              ScoreType fromMatch = matchScore;   //local alignment can also start with a match at this char
+
+              //deletion edit
+              ScoreType fromDeletion = -1; 
+
+              for(auto k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
+              {
+                fromMatch = psgl_max (fromMatch, matrix[(i-1) & 1][ graph.adjcny_in[k] ] + matchScore);
+                fromDeletion = psgl_max (fromDeletion, matrix[i & 1][ graph.adjcny_in[k] ] - SCORE::del);
+              }
+
+              //Evaluate recursion 
+              matrix[i & 1][j] = psgl_max ( psgl_max(fromInsertion, fromMatch) , psgl_max(fromDeletion, 0) );
+
+              //Update best score observed till now
+              if (bestScoreVector[readno].score < matrix[i & 1][j])
+              {
+                bestScoreVector[readno].score = matrix[i & 1][j];
+                bestScoreVector[readno].refColumn = j;
+                bestScoreVector[readno].qryRow = i;
+              }
+
+
+            } // end of row computation
+          } // end of DP
 
           auto tick2 = psgl::timer::rdtsc();
-          time_p1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
-        }
+          float time_p1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+
+#pragma omp critical 
+          {
+            std::cout << "INFO, psgl::alignToDAGLocal_Phase1, aligning read #" << readno/2 + 1 << " [" << ((readno % 2) ? '-' : '+')  << "]" << ", length = " << readLength << std::endl;
+            std::cout << "INFO, psgl::alignToDAGLocal_Phase1, best score = " << bestScoreVector[readno].score << ", ending at DP row = " << bestScoreVector[readno].qryRow << ", DP col = " << bestScoreVector[readno].refColumn << std::endl;
+            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1, timings (sec):  phase 1 = " << time_p1 << std::endl;
+          }
+        } // all reads done
+      } //end of omp parallel
+
 
 #ifdef VTUNE_SUPPORT
-  __itt_pause();
+        __itt_pause();
 #endif
 
-        BestScoreInfo<ScoreType, VertexIdType> &best = bestFwd;
+    }
 
-        if (bestFwd.score > bestRev.score)
-        {
-          best = bestFwd;
-          best.strand = '+';
-        }
-        else
-        {
-          best = bestRev;
-          best.strand = '-';
-          read = read_revComp; 
-        }
+  /**
+   * @brief                         execute second phase of alignment i.e. compute cigar
+   * @tparam[in]  ScoreType         type to store scores in DP matrix
+   * @param[in]   readSet
+   * @param[in]   readLength
+   * @param[in]   graph
+   * @param[in]   bestScoreVector   best score and alignment location for each read
+   * @note                          we assume that query sequences are oriented properly
+   *                                after executing the alignment phase 1
+   */
+
+  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
+    void alignToDAGLocal_Phase2(  const std::vector<std::string> &readSet,
+                                  const CSR_char_container<VertexIdType, EdgeIdType> &graph,
+                                  std::vector< BestScoreInfo<ScoreType, VertexIdType> > &bestScoreVector)
+    {
+      assert (bestScoreVector.size() == readSet.size());
+
+#pragma omp parallel for
+      for (size_t readno = 0; readno < readSet.size(); readno++)
+      {
+        //for time profiling within phase 2
+        float time_p2_1, time_p2_2, time_p2_3;
+
+        //read length
+        auto readLength = readSet[readno].length();
 
         //
-        // PHASE 2 : COMPUTE FARTHEST REACHABLE VERTEX 
+        // PHASE 2.1 : COMPUTE FARTHEST REACHABLE VERTEX 
         //
 
         VertexIdType leftMostReachable;
@@ -96,29 +160,29 @@ namespace psgl
         {
           auto tick1 = psgl::timer::rdtsc();
 
-          std::size_t maxDistance = read.length() + std::ceil( read.length() * 1.0 * SCORE::match/SCORE::del );
-          leftMostReachable = graph.computeLeftMostReachableVertex(best.refColumn, maxDistance);  
+          std::size_t maxDistance = readLength + std::ceil( readLength * 1.0 * SCORE::match/SCORE::del );
+          leftMostReachable = graph.computeLeftMostReachableVertex(bestScoreVector[readno].refColumn, maxDistance);  
 
 #ifdef DEBUG
           std::cout << "INFO, psgl::alignToDAGLocal, left most reachable vertex id = " << leftMostReachable << std::endl;
 #endif
 
           auto tick2 = psgl::timer::rdtsc();
-          time_p2 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+          time_p2_1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
 
         //
-        // PHASE 3 : RECOMPUTE DP MATRIX WITH TRACEBACK INFORMATION
+        // PHASE 2.2 : RECOMPUTE DP MATRIX WITH TRACEBACK INFORMATION
         //
 
         //width of score matrix that we need in memory
-        std::size_t reducedWidth = best.refColumn - leftMostReachable + 1;
+        std::size_t reducedWidth = bestScoreVector[readno].refColumn - leftMostReachable + 1;
 
         //for new beginning column
         std::size_t j0 = leftMostReachable; 
 
         //height of scoring matrix for re-computation
-        std::size_t reducedHeight = best.qryRow + 1;   //i.e. row id ass. with best score -- plus one 
+        std::size_t reducedHeight = bestScoreVector[readno].qryRow + 1;   //i.e. row id ass. with best score -- plus one 
 
         //scores in the last row
         std::vector<ScoreType> finalRow(reducedWidth, 0);
@@ -144,10 +208,11 @@ namespace psgl
               char curChar = graph.vertex_label[j + j0];
 
               //insertion edit
-              ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
+              ScoreType fromInsertion = matrix[(i-1) & 1][j] - SCORE::ins;
+              //'& 1' is same as doing modulo 2
 
               //match-mismatch edit
-              ScoreType matchScore = curChar == read[i] ? SCORE::match : -1 * SCORE::mismatch;
+              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : -1 * SCORE::mismatch;
               ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
 
               //deletion edit
@@ -155,39 +220,38 @@ namespace psgl
 
               for(auto k = graph.offsets_in[j + j0]; k < graph.offsets_in[j + j0 + 1]; k++)
               {
-                //ignore edges outside range 
+                //ignore edges outside the range 
                 if ( graph.adjcny_in[k] >= j0)
                 {
-                  fromMatch = std::max (fromMatch, matrix[(i-1) % 2][ graph.adjcny_in[k] - j0] + matchScore);
-                  fromDeletion = std::max (fromDeletion, matrix[i % 2][ graph.adjcny_in[k] - j0] - SCORE::del);
+                  fromMatch = psgl_max (fromMatch, matrix[(i-1) & 1][ graph.adjcny_in[k] - j0] + matchScore);
+                  fromDeletion = psgl_max (fromDeletion, matrix[i & 1][ graph.adjcny_in[k] - j0] - SCORE::del);
                 }
               }
 
               //evaluate current score
-              matrix[i % 2][j] = std::max ( std::max(fromInsertion, fromMatch) , std::max(fromDeletion, 0) );
+              matrix[i & 1][j] = psgl_max ( psgl_max(fromInsertion, fromMatch) , psgl_max(fromDeletion, 0) );
 
               //save vertical difference of scores, used later for backtracking
-              completeMatrixLog[i][j] = matrix[i % 2][j] - matrix[(i-1) % 2][j];
-
+              completeMatrixLog[i][j] = matrix[i & 1][j] - matrix[(i-1) & 1][j];
             }
 
             //Save last row
             if (i == reducedHeight - 1) 
-              finalRow = matrix[i % 2];
+              finalRow = matrix[i & 1];
           }
 
           ScoreType bestScoreReComputed = *std::max_element(finalRow.begin(), finalRow.end());
 
           //the recomputed score and its location should match our original calculation
-          assert( bestScoreReComputed == best.score );
-          assert( bestScoreReComputed == finalRow[ best.refColumn - j0 ] );
+          assert( bestScoreReComputed == bestScoreVector[readno].score );
+          assert( bestScoreReComputed == finalRow[ bestScoreVector[readno].refColumn - j0 ] );
 
           auto tick2 = psgl::timer::rdtsc();
-          time_p3 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+          time_p2_2 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
 
         //
-        // PHASE 4 : COMPUTE CIGAR
+        // PHASE 2.3 : COMPUTE CIGAR
         //
         
         std::string cigar;
@@ -199,7 +263,7 @@ namespace psgl
           std::vector<ScoreType> aboveRowScores (reducedWidth);
 
           int col = reducedWidth - 1;
-          int row = best.qryRow;
+          int row = bestScoreVector[readno].qryRow;
 
           while (col >= 0 && row >= 0)
           {
@@ -217,7 +281,7 @@ namespace psgl
             ScoreType fromInsertion = aboveRowScores[col] - SCORE::ins;
 
             //match-mismatch edit
-            ScoreType matchScore = curChar == read[row] ? SCORE::match : -1 * SCORE::mismatch;
+            ScoreType matchScore = curChar == readSet[readno][row] ? SCORE::match : -1 * SCORE::mismatch;
 
             ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
             std::size_t fromMatchPos = col;
@@ -291,18 +355,17 @@ namespace psgl
           psgl::seqUtils::cigarCompact(cigar);
 
           //validate if cigar yields best score
-          assert ( psgl::seqUtils::cigarScore<ScoreType> (cigar) ==  best.score );
+          assert ( psgl::seqUtils::cigarScore<ScoreType> (cigar) ==  bestScoreVector[readno].score );
 
           auto tick2 = psgl::timer::rdtsc();
-          time_p4 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+          time_p2_3 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
         }
 
 #pragma omp critical 
         {
-          std::cout << "INFO, psgl::alignToDAGLocal, aligning read #" << readno + 1 << ", length = " << read.length() << std::endl;
-          std::cout << "INFO, psgl::alignToDAGLocal, best score = " << best.score << ", strand = " << best.strand << ", ending at DP row = " << best.qryRow << ", DP col = " << best.refColumn << std::endl;
-          std::cout << "INFO, psgl::alignToDAGLocal, cigar: " << cigar << std::endl;
-          std::cout << "TIMER, psgl::alignToDAGLocal, phase timings (sec) : " << time_p1 << ", " << time_p2 << ", " << time_p3 << ", " << time_p4 << std::endl;
+          std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", length = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << std::endl;
+          std::cout << "INFO, psgl::alignToDAGLocal_Phase2, cigar: " << cigar << std::endl;
+          std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, timings (sec):  phase 2.1 = " << time_p2_1 << ", phase 2.2 = " << time_p2_2 << ", phase 2.3 = " << time_p2_3 << std::endl;
         }
       }
     }
@@ -310,57 +373,73 @@ namespace psgl
   /**
    * @brief                   local alignment routine
    * @tparam[in]  ScoreType   type to store scores in DP matrix
-   * @param[in]   read
-   * @param[in]   readLength
-   * @param[in]   graph
-   * @param[out]  best        value and location of best score
+   * @param[in]   readSet
+   * @param[in]   graph       node-labeled directed graph 
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGLocal_Phase1_Score(  const std::string &read,
-                                        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-                                        BestScoreInfo<ScoreType, VertexIdType> &best)
+    void alignToDAGLocal( const std::vector<std::string> &readSet,
+        const CSR_char_container<VertexIdType, EdgeIdType> &graph)
     {
-      //initialize matrix of size 2 x width, init with zero
-      //we will keep re-using rows to keep memory-usage low
-      std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(graph.numVertices, 0));
+      //create buffer to save best score info for each read and its rev. complement
+      std::vector< BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector_P1 (2 * readSet.size() );
 
-      //iterate over characters in read
-      for (std::size_t i = 0; i < read.length(); i++)
+      //to save input query sequences for phase 1
+      std::vector<std::string> readSet_P1;
+
+      assert (readSet.size() > 0);
+
+      //
+      // Phase 1 [get best score values and location]
+      //
       {
-        //iterate over characters in reference graph
-        for (std::size_t j = 0; j < graph.numVertices; j++)
+        for (size_t readno = 0; readno < readSet.size(); readno++)
         {
-          //current reference character
-          char curChar = graph.vertex_label[j];
+          std::string read_reverse (readSet[readno]);
+          psgl::seqUtils::reverseComplement( readSet[readno], read_reverse); 
 
-          //insertion edit
-          ScoreType fromInsertion = matrix[(i-1) % 2][j] - SCORE::ins;
+          readSet_P1.push_back (readSet[readno]);
+          readSet_P1.push_back (read_reverse);
+        }
 
-          //match-mismatch edit
-          ScoreType matchScore = curChar == read[i] ? SCORE::match : -1 * SCORE::mismatch;
-          ScoreType fromMatch = matchScore;   //local alignment can also start with a match at this char
+        assert (bestScoreVector_P1.size() == 2 * readSet.size() );
+        assert (readSet_P1.size() == 2 * readSet.size() );
 
-          //deletion edit
-          ScoreType fromDeletion = -1; 
 
-          for(auto k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
+        //align read to ref.
+        alignToDAGLocal_Phase1(readSet_P1, graph, bestScoreVector_P1);
+      }
+
+      //
+      // Phase 2 [comute cigar]
+      //
+      {
+        std::vector< BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector_P2;
+        std::vector<std::string> readSet_P2;
+
+        for (size_t readno = 0; readno < readSet.size(); readno++)
+        {
+          if (bestScoreVector_P1[2 * readno].score > bestScoreVector_P1[2 * readno + 1].score)
           {
-            fromMatch = std::max (fromMatch, matrix[(i-1) % 2][ graph.adjcny_in[k] ] + matchScore);
-            fromDeletion = std::max (fromDeletion, matrix[i % 2][ graph.adjcny_in[k] ] - SCORE::del);
+            bestScoreVector_P2.push_back (bestScoreVector_P1[2 * readno]);
+            readSet_P2.push_back (readSet_P1[2 * readno]);
+
+            bestScoreVector_P2[readno].strand = '+';
           }
-
-          //Evaluate recursion 
-          matrix[i % 2][j] = std::max ( std::max(fromInsertion, fromMatch) , std::max(fromDeletion, 0) );
-
-          //Update best score observed till now
-          if (best.score < matrix[i % 2][j])
+          else
           {
-            best.score = matrix[i % 2][j];
-            best.refColumn = j;
-            best.qryRow = i;
+            bestScoreVector_P2.push_back (bestScoreVector_P1[2 * readno + 1]);
+            readSet_P2.push_back (readSet_P1[2 * readno + 1]);
+
+            bestScoreVector_P2[readno].strand = '-';
           }
         }
+
+        assert (bestScoreVector_P2.size() == readSet.size() );
+        assert (readSet_P2.size() == readSet.size() );
+
+        alignToDAGLocal_Phase2(readSet_P2, graph, bestScoreVector_P2);
       }
+
     }
 
   /**

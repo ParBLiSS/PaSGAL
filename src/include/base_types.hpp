@@ -7,6 +7,7 @@
 #ifndef PSGL_BASETYPES_HPP
 #define PSGL_BASETYPES_HPP
 
+
 namespace psgl
 {
 
@@ -41,12 +42,12 @@ namespace psgl
   template <typename ScoreType, typename VertexIdType>
     struct BestScoreInfo
     {
-      //score value
-      ScoreType score;
-
       //positioning in complete DP matrix where optimal alignment ends
       std::size_t refColumn;
       std::size_t qryRow;
+
+      //score value
+      ScoreType score;
 
       char strand; // '+' or '-'
 
