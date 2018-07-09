@@ -110,13 +110,13 @@ namespace psgl
 
 #pragma omp critical 
           {
-            std::cout << "INFO, psgl::alignToDAGLocal_Phase1, aligning read #" << readno/2 + 1 << " [" << ((readno % 2) ? '-' : '+')  << "]" << ", length = " << readLength << std::endl;
-            std::cout << "INFO, psgl::alignToDAGLocal_Phase1, best score = " << bestScoreVector[readno].score << ", ending at DP row = " << bestScoreVector[readno].qryRow << ", DP col = " << bestScoreVector[readno].refColumn << std::endl;
-            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1, timings (sec):  phase 1 = " << time_p1 << std::endl;
+            std::cout << "INFO, psgl::alignToDAGLocal_Phase1, aligning read #" << readno/2 + 1 << " [" << ((readno % 2) ? '-' : '+')  << "]" << ", length = " << readLength << "\n";
+            std::cout << "INFO, psgl::alignToDAGLocal_Phase1, best score = " << bestScoreVector[readno].score << ", ending at DP row = " << bestScoreVector[readno].qryRow << ", DP col = " << bestScoreVector[readno].refColumn << "\n";
+            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1, timings (sec):  phase 1 = " << time_p1 << "\n";
+            std::cout.flush();
           }
         } // all reads done
       } //end of omp parallel
-
 
 #ifdef VTUNE_SUPPORT
         __itt_pause();
@@ -363,9 +363,10 @@ namespace psgl
 
 #pragma omp critical 
         {
-          std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", length = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << std::endl;
-          std::cout << "INFO, psgl::alignToDAGLocal_Phase2, cigar: " << cigar << std::endl;
-          std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, timings (sec):  phase 2.1 = " << time_p2_1 << ", phase 2.2 = " << time_p2_2 << ", phase 2.3 = " << time_p2_3 << std::endl;
+          std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", length = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
+          std::cout << "INFO, psgl::alignToDAGLocal_Phase2, cigar: " << cigar << "\n";
+          std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, timings (sec):  phase 2.1 = " << time_p2_1 << ", phase 2.2 = " << time_p2_2 << ", phase 2.3 = " << time_p2_3 << "\n";
+          std::cout.flush();
         }
       }
     }
@@ -387,6 +388,8 @@ namespace psgl
       std::vector<std::string> readSet_P1;
 
       assert (readSet.size() > 0);
+
+      printThreadCount();
 
       //
       // Phase 1 [get best score values and location]
@@ -502,9 +505,7 @@ namespace psgl
         gzclose(fp);  
       }
 
-//#ifdef DEBUG
-        std::cout << "INFO, psgl::alignToDAG, total count of reads = " << reads.size() << std::endl;
-//#endif
+      std::cout << "INFO, psgl::alignToDAG, total count of reads = " << reads.size() << std::endl;
 
       alignToDAG<ScoreType> (reads, graph, mode);
     }

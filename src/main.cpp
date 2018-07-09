@@ -21,6 +21,12 @@ int main(int argc, char **argv)
   __itt_pause();
 #endif
 
+#ifdef NDEBUG
+  std::cout << "INFO, psgl::main, assert checks switched OFF" << std::endl;
+#else
+  std::cout << "INFO, psgl::main, assert checks switched ON" << std::endl;
+#endif
+
   std::string rfile = "", qfile = "", mode = "";
 
   auto cli = (
