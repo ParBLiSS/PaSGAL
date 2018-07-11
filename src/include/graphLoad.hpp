@@ -25,7 +25,7 @@ namespace psgl
    * @tparam[in]    VertexIdType  data type to store vertex ids (tbd by total #vertices)
    * @tparam[in]    EdgeIdType    data type to store offsets in CSR graph (tbd by total #edges)
    */
-  template <typename VertexIdType = uint32_t, typename EdgeIdType = uint32_t>
+  template <typename VertexIdType, typename EdgeIdType>
     class graphLoader
     {
       public:
@@ -43,7 +43,7 @@ namespace psgl
          */
         void loadFromVG(const std::string &filename)
         {
-          if(!exists(filename))
+          if( !fileExists(filename) )
           {
             std::cerr << filename << " not accessible." << std::endl;
             exit(1);
@@ -115,7 +115,7 @@ namespace psgl
          */
         void loadFromTxt(const std::string &filename)
         {
-          if(!exists(filename))
+          if( !fileExists(filename))
           {
             std::cerr << filename << " not accessible." << std::endl;
             exit(1);
@@ -194,14 +194,6 @@ namespace psgl
 #endif
         }
 
-        /**
-         * @brief     check if file is accessible
-         */
-        bool exists(const std::string &filename) const
-        {
-          std::ifstream infile(filename);
-          return infile.good();
-        }
     };
 
 }

@@ -44,7 +44,11 @@ int main(int argc, char **argv)
   std::cout << "INFO, psgl::main, reference file = " << rfile << " (in " << mode  << " format) " << std::endl;
   std::cout << "INFO, psgl::main, query file = " << qfile << std::endl;
 
-  psgl::graphLoader<> g;
+  using VertexIdType = uint32_t;
+  using EdgeIdType = uint32_t;
+  using ScoreType = int;
+
+  psgl::graphLoader<VertexIdType, EdgeIdType> g;
 
   if (mode.compare("vg") == 0)
     g.loadFromVG(rfile);
@@ -56,7 +60,8 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  psgl::alignToDAG<int>(qfile, g.diCharGraph, psgl::MODE::LOCAL);  
+  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
 #ifdef DEBUG
   g.printGraph();

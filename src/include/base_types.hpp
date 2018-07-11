@@ -51,6 +51,9 @@ namespace psgl
 
       char strand; // '+' or '-'
 
+      //TODO: Storing cigar may be expensive, consider removing later
+      std::string cigar;
+
       /**
        * @brief   constructor
        */

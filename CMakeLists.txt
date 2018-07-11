@@ -23,24 +23,40 @@ IF(NOT CMAKE_BUILD_TYPE)
     FORCE)
 ENDIF(NOT CMAKE_BUILD_TYPE)
 
+# Save libs and executables in the same place
+set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib CACHE PATH "Output directory for libraries" )
+
 #Set vtune support
 OPTION(ENABLE_VTUNE "Turn on/off the vtune support with intel compiler" OFF)
 
-find_package(OpenMP)
+#Add OpenMP support
+find_package(OpenMP REQUIRED)
 if (OPENMP_FOUND)
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+# Check if the user want to build sample applications
+OPTION(BUILD_TESTS "Inform whether sample applications should be built" OFF)
+
+#Add googleTest support
+add_subdirectory("${PROJECT_SOURCE_DIR}/ext/googletest")
+
+
 #Configure Protobuf (path needs to be configured by each user)
 #TODO: automate generation of protobuf cpp file
 set(PROTOBUF_INCLUDE_DIRS "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/include")
 set(PROTOBUF_LIBRARY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/lib/libprotobuf.so")
-
-include_directories("${PROJECT_SOURCE_DIR}/ext")
-include_directories("${PROJECT_SOURCE_DIR}/src/include")
 include_directories(${PROTOBUF_INCLUDE_DIRS})
+add_library(vg_protobuf "${PROJECT_SOURCE_DIR}/ext/vg.pb.cc")
+
+#include external header files
+include_directories("${PROJECT_SOURCE_DIR}/ext")
+
+#include our own directories
+include_directories("${PROJECT_SOURCE_DIR}/src/include")
+add_subdirectory("${PROJECT_SOURCE_DIR}/tests")
 
 #### For vtune support
 if(ENABLE_VTUNE)
@@ -49,6 +65,5 @@ if(ENABLE_VTUNE)
   add_definitions(-DVTUNE_SUPPORT)
 endif(ENABLE_VTUNE)
 
-
-add_executable(PaSGAL "${PROJECT_SOURCE_DIR}/src/main.cpp" "${PROJECT_SOURCE_DIR}/src/vg.pb.cc")
-target_link_libraries(PaSGAL ${PROTOBUF_LIBRARY} ${VTUNE_LIBRARY} -lz -lpthread)
+add_executable(PaSGAL "${PROJECT_SOURCE_DIR}/src/main.cpp")
+target_link_libraries(PaSGAL ${PROTOBUF_LIBRARY} vg_protobuf ${VTUNE_LIBRARY} -lz -lpthread)

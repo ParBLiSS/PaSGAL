@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <thread>
 #include <chrono>
+#include <fstream>
 #include <omp.h>
 
 #include "base_types.hpp"
@@ -194,9 +195,19 @@ namespace psgl
       int tid = omp_get_thread_num();
 
       if (tid == 0) 
-        std::cout << "Number of openmp threads available = " << omp_get_num_threads() << std::endl;
+        std::cout << "INFO, psgl::printThreadCount, Number of openmp threads available = " << omp_get_num_threads() << std::endl;
     }
   }
+
+  /**
+   * @brief     check if file is accessible
+   */
+  bool fileExists(const std::string &filename)
+  {
+    std::ifstream infile(filename);
+    return infile.good();
+  }
+
 }
 
 #endif
