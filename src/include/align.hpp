@@ -73,25 +73,28 @@ namespace psgl
               //current reference character
               char curChar = graph.vertex_label[j];
 
-              //insertion edit
-              ScoreType fromInsertion = matrix[(i-1) & 1][j] - SCORE::ins;
-              //'& 1' is same as doing modulo 2
+              ScoreType currentMax = 0;
+
+              //see if query and ref. character match
+              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : -1 * SCORE::mismatch;
 
               //match-mismatch edit
-              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : -1 * SCORE::mismatch;
-              ScoreType fromMatch = matchScore;   //local alignment can also start with a match at this char
-
-              //deletion edit
-              ScoreType fromDeletion = -1; 
+              currentMax = psgl_max (currentMax, matchScore);   //local alignment can also start with a match at this char
 
               for(auto k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
               {
-                fromMatch = psgl_max (fromMatch, matrix[(i-1) & 1][ graph.adjcny_in[k] ] + matchScore);
-                fromDeletion = psgl_max (fromDeletion, matrix[i & 1][ graph.adjcny_in[k] ] - SCORE::del);
+                //paths with match mismatch edit
+                currentMax = psgl_max (currentMax, matrix[(i-1) & 1][ graph.adjcny_in[k] ] + matchScore);
+                //'& 1' is same as doing modulo 2
+
+                //paths with deletion edit
+                currentMax = psgl_max (currentMax, matrix[i & 1][ graph.adjcny_in[k] ] - SCORE::del);
               }
 
-              //Evaluate recursion 
-              matrix[i & 1][j] = psgl_max ( psgl_max(fromInsertion, fromMatch) , psgl_max(fromDeletion, 0) );
+              //insertion edit
+              currentMax = psgl_max( currentMax, matrix[(i-1) & 1][j] - SCORE::ins );
+
+              matrix[i & 1][j] = currentMax;
 
               //Update best score observed till now
               if (bestScoreVector[readno].score < matrix[i & 1][j])
@@ -100,8 +103,6 @@ namespace psgl
                 bestScoreVector[readno].refColumn = j;
                 bestScoreVector[readno].qryRow = i;
               }
-
-
             } // end of row computation
           } // end of DP
 
@@ -358,7 +359,7 @@ namespace psgl
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", len = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, cigar: " << bestScoreVector[readno].cigar << "\n";
         //std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, timings (sec):  phase 2.1 = " << time_p2_1 << ", phase 2.2 = " << time_p2_2 << ", phase 2.3 = " << time_p2_3 << "\n";
-        std::cout.flush();
+        //std::cout.flush();
       }
     }
 
