@@ -67,6 +67,9 @@ namespace psgl
       __itt_resume();
 #endif
 
+      //for time profiling within phase 1
+      auto tick1 = __rdtsc();
+
       //init best score vector to zero bits
       std::fill (bestScores.begin(), bestScores.end(), _ZERO);
       std::fill (bestCols.begin(), bestCols.end(), _ZERO);
@@ -152,6 +155,11 @@ namespace psgl
           } // end of DP
         } // all reads done
       } //end of omp parallel
+
+      auto tick2 = __rdtsc();
+
+      std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_vectorized, CPU cycles spent in phase 1 (without wrapper) = " << tick2 - tick1
+                << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
 
 #ifdef VTUNE_SUPPORT
         __itt_pause();

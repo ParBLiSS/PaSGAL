@@ -159,46 +159,6 @@ namespace psgl
       }
   }
 
-  namespace timer
-  {
-    /**
-     * @brief  get CPU cycle count
-     */
-    uint64_t rdtsc()
-    {
-      return __rdtsc();
-    }
-
-    /**
-     * @brief   return count of CPU cycles per second
-     */
-    uint64_t cycles_per_sec()
-    {
-      uint64_t tick1 = rdtsc();
-
-      //sleep for a second
-      std::this_thread::sleep_for (std::chrono::seconds(1));
-
-      uint64_t tick2 = rdtsc();
-
-      return tick2 - tick1;
-    }
-  }
-
-  /**
-   * @brief   print thread count
-   */
-  void printThreadCount()
-  {
-#pragma omp parallel
-    {
-      int tid = omp_get_thread_num();
-
-      if (tid == 0) 
-        std::cout << "INFO, psgl::printThreadCount, Number of openmp threads available = " << omp_get_num_threads() << std::endl;
-    }
-  }
-
   /**
    * @brief     check if file is accessible
    */
@@ -208,6 +168,52 @@ namespace psgl
     return infile.good();
   }
 
+  /**
+   * @brief       print few important execution env. variables
+   */
+  void showExecutionEnv()
+  {
+    std::cout << "--------" << "\n";
+
+    {
+      std::cout << "Assert() checks"; 
+#ifdef NDEBUG
+      std::cout << "\t\t\tOFF \n";
+#else
+      std::cout << "\t\t\tON \n";
+#endif
+    }
+
+    {
+      std::cout << "AVX512 support";
+#ifdef __AVX512BW__
+      std::cout << "\t\t\tON \n";
+#else
+      std::cout << "\t\t\tOFF\n";
+#endif
+    }
+
+    {
+      std::cout << "VTUNE support";
+#ifdef VTUNE_SUPPORT
+      std::cout << "\t\t\tON \n";
+#else
+      std::cout << "\t\t\tOFF\n";
+#endif
+    }
+
+#pragma omp parallel
+    {
+      int tid = omp_get_thread_num();
+
+      if (tid == 0) 
+      {
+        std::cout << "Default OMP thread count\t" << omp_get_num_threads() << "\n";
+      }
+    }
+
+    std::cout << "--------\n" << std::endl;
+  }
 }
 
 #endif

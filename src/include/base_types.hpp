@@ -10,6 +10,7 @@
 #include <immintrin.h>
 
 #define psgl_max(a,b) (((a)>(b))?(a):(b))
+#define ASSUMED_CPU_FREQ 2300000000
 
 namespace psgl
 {

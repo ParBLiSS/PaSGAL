@@ -38,7 +38,7 @@ namespace psgl
    * @note                          reverse complement of the read is not handled here
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGLocal_Phase1(  const std::vector<std::string> &readSet,
+    void alignToDAGLocal_Phase1_scalar(  const std::vector<std::string> &readSet,
                                   const CSR_char_container<VertexIdType, EdgeIdType> &graph,
                                   std::vector< BestScoreInfo<ScoreType, VertexIdType> > &bestScoreVector)
     {
@@ -47,6 +47,8 @@ namespace psgl
 #ifdef VTUNE_SUPPORT
       __itt_resume();
 #endif
+
+      auto tick1 = __rdtsc();
 
 #pragma omp parallel
       {
@@ -60,9 +62,6 @@ namespace psgl
         {
           //reset buffer
           std::fill(matrix[1].begin(), matrix[1].end(), 0);
-
-          //for time profiling within phase 1
-          auto tick1 = psgl::timer::rdtsc();
 
           auto readLength = readSet[readno].length();
 
@@ -108,11 +107,13 @@ namespace psgl
             } // end of row computation
           } // end of DP
 
-          auto tick2 = psgl::timer::rdtsc();
-          float time_p1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
-
         } // all reads done
       } //end of omp parallel
+
+      auto tick2 = __rdtsc();
+
+      std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_scalar, CPU cycles spent in phase 1 = " << tick2 - tick1 
+                << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
 
 #ifdef VTUNE_SUPPORT
         __itt_pause();
@@ -139,7 +140,7 @@ namespace psgl
       for (size_t readno = 0; readno < readSet.size(); readno++)
       {
         //for time profiling within phase 2
-        float time_p2_1, time_p2_2, time_p2_3;
+        uint64_t time_p2_1, time_p2_2, time_p2_3;
 
         //read length
         auto readLength = readSet[readno].length();
@@ -151,7 +152,7 @@ namespace psgl
         VertexIdType leftMostReachable;
 
         {
-          auto tick1 = psgl::timer::rdtsc();
+          auto tick1 = __rdtsc();
 
           std::size_t maxDistance = readLength + std::ceil( readLength * 1.0 * SCORE::match/SCORE::del );
           leftMostReachable = graph.computeLeftMostReachableVertex(bestScoreVector[readno].refColumn, maxDistance);  
@@ -160,8 +161,8 @@ namespace psgl
           std::cout << "INFO, psgl::alignToDAGLocal, left most reachable vertex id = " << leftMostReachable << std::endl;
 #endif
 
-          auto tick2 = psgl::timer::rdtsc();
-          time_p2_1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+          auto tick2 = __rdtsc();
+          time_p2_1 = tick2 - tick1;
         }
 
         //
@@ -186,7 +187,7 @@ namespace psgl
         std::vector< std::vector<int8_t> > completeMatrixLog(reducedHeight, std::vector<int8_t>(reducedWidth, 0));
 
         {
-          auto tick1 = psgl::timer::rdtsc();
+          auto tick1 = __rdtsc();
 
           //scoring matrix of size 2 x width, init with zero
           std::vector<std::vector<ScoreType>> matrix(2, std::vector<ScoreType>(reducedWidth, 0));
@@ -239,8 +240,8 @@ namespace psgl
           assert( bestScoreReComputed == bestScoreVector[readno].score );
           assert( bestScoreReComputed == finalRow[ bestScoreVector[readno].refColumn - j0 ] );
 
-          auto tick2 = psgl::timer::rdtsc();
-          time_p2_2 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+          auto tick2 = __rdtsc();
+          time_p2_2 = tick2 - tick1;
         }
 
         //
@@ -250,7 +251,7 @@ namespace psgl
         std::string cigar;
 
         {
-          auto tick1 = psgl::timer::rdtsc();
+          auto tick1 = __rdtsc();
 
           std::vector<ScoreType> currentRowScores = finalRow; 
           std::vector<ScoreType> aboveRowScores (reducedWidth);
@@ -352,13 +353,13 @@ namespace psgl
 
           bestScoreVector[readno].cigar = cigar;
 
-          auto tick2 = psgl::timer::rdtsc();
-          time_p2_3 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
+          auto tick2 = __rdtsc();
+          time_p2_3 = tick2 - tick1;
         }
 
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", len = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, cigar: " << bestScoreVector[readno].cigar << "\n";
-        //std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, timings (sec):  phase 2.1 = " << time_p2_1 << ", phase 2.2 = " << time_p2_2 << ", phase 2.3 = " << time_p2_3 << "\n";
+        //std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, CPU cycles spent in :  phase 2.1 = " << time_p2_1 << ", phase 2.2 = " << time_p2_2 << ", phase 2.3 = " << time_p2_3 << "\n";
         //std::cout.flush();
       }
     }
@@ -383,14 +384,11 @@ namespace psgl
 
       assert (readSet.size() > 0);
 
-      //init openmp threads
-      printThreadCount();
-
       //
       // Phase 1 [get best score values and location]
       //
       {
-        auto tick1 = psgl::timer::rdtsc();
+        auto tick1 = __rdtsc();
 
         for (size_t readno = 0; readno < readSet.size(); readno++)
         {
@@ -407,24 +405,21 @@ namespace psgl
 
         //align read to ref.
 #ifdef __AVX512BW__
-        std::cout << "INFO, psgl::alignToDAG, calling AVX512 vectorized verion of phase 1 \n";
         alignToDAGLocal_Phase1_vectorized_wrapper(readSet_P1, graph, bestScoreVector_P1);
 #else
-        std::cout << "INFO, psgl::alignToDAG, calling scalar verion of phase 1 \n";
-        alignToDAGLocal_Phase1(readSet_P1, graph, bestScoreVector_P1);
+        alignToDAGLocal_Phase1_scalar(readSet_P1, graph, bestScoreVector_P1);
 #endif
 
-        auto tick2 = psgl::timer::rdtsc();
-        float time_p1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
-
-        std::cout << "TIMER, psgl::alignToDAG, timings (sec):  total time spent in phase 1  = " << time_p1 << "\n";
+        auto tick2 = __rdtsc();
+        std::cout << "TIMER, psgl::alignToDAG, CPU cycles spent in phase 1  = " << tick2 - tick1
+                  << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
       }
 
       //
       // Phase 2 [comute cigar]
       //
       {
-        auto tick1 = psgl::timer::rdtsc();
+        auto tick1 = __rdtsc();
 
         std::vector<std::string> readSet_P2;
 
@@ -451,10 +446,9 @@ namespace psgl
 
         alignToDAGLocal_Phase2(readSet_P2, graph, outputBestScoreVector);
 
-        auto tick2 = psgl::timer::rdtsc();
-        float time_p2 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();
-
-        std::cout << "TIMER, psgl::alignToDAG, timings (sec):  total time spent in phase 2  = " << time_p2 << "\n";
+        auto tick2 = __rdtsc();
+        std::cout << "TIMER, psgl::alignToDAG, CPU cycles spent in phase 2  = " << tick2 - tick1
+                  << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
       }
 
     }

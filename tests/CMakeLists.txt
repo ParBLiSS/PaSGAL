@@ -15,3 +15,8 @@ if (BUILD_TESTS)
   add_executable(test-local_alignment test_local_alignment.cpp)
   target_link_libraries(test-local_alignment gtest_main  ${PROTOBUF_LIBRARY} vg_protobuf -lz -lpthread)
 endif(BUILD_TESTS)
+
+if (BUILD_TESTS)
+  add_executable(test-local_alignment_uniform_len test_local_alignment_uniform_len.cpp)
+  target_link_libraries(test-local_alignment_uniform_len gtest_main  ${PROTOBUF_LIBRARY} vg_protobuf -lz -lpthread)
+endif(BUILD_TESTS)

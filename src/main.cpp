@@ -21,12 +21,6 @@ int main(int argc, char **argv)
   __itt_pause();
 #endif
 
-#ifdef NDEBUG
-  std::cout << "INFO, psgl::main, assert checks switched OFF" << std::endl;
-#else
-  std::cout << "INFO, psgl::main, assert checks switched ON" << std::endl;
-#endif
-
   std::string rfile = "", qfile = "", mode = "";
 
   auto cli = (
@@ -40,6 +34,10 @@ int main(int argc, char **argv)
     clipp::print ( clipp::make_man_page(cli, argv[0]) );
     exit(1);
   }
+
+  // print execution environment based on which MACROs are set
+  // for convenience
+  psgl::showExecutionEnv();
 
   std::cout << "INFO, psgl::main, reference file = " << rfile << " (in " << mode  << " format) " << std::endl;
   std::cout << "INFO, psgl::main, query file = " << qfile << std::endl;
