@@ -145,11 +145,11 @@ namespace psgl
             if ( c == '=' )
               score += SCORE::match * currentNumeric;
             else if ( c == 'X')
-              score -= SCORE::mismatch * currentNumeric;
+              score += SCORE::mismatch * currentNumeric;
             else if (c == 'I')
-              score -= SCORE::ins * currentNumeric;
+              score += SCORE::ins * currentNumeric;
             else  // c == 'D'
-              score -= SCORE::del * currentNumeric;
+              score += SCORE::del * currentNumeric;
 
             currentNumeric = 0;
           }

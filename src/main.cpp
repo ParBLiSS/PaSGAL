@@ -46,7 +46,7 @@ int main(int argc, char **argv)
 
   using VertexIdType = uint32_t;
   using EdgeIdType = uint32_t;
-  using ScoreType = int;
+  using ScoreType = int32_t;
 
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
 

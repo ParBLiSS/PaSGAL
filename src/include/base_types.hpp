@@ -7,6 +7,9 @@
 #ifndef PSGL_BASETYPES_HPP
 #define PSGL_BASETYPES_HPP
 
+#include <immintrin.h>
+
+#define psgl_max(a,b) (((a)>(b))?(a):(b))
 
 namespace psgl
 {
@@ -20,9 +23,9 @@ namespace psgl
     static const int8_t match = 1;
 
     //penalties
-    static const int8_t mismatch = 1;
-    static const int8_t ins = 1;
-    static const int8_t del = 1;
+    static const int8_t mismatch = -1;
+    static const int8_t ins = -1;
+    static const int8_t del = -1;
   };
 
   /**

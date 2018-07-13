@@ -8,11 +8,14 @@
 #ifndef GRAPH_ALIGN_HPP
 #define GRAPH_ALIGN_HPP
 
+#include <immintrin.h>
+
 #include "graphLoad.hpp"
 #include "csr_char.hpp"
 #include "graph_iter.hpp"
 #include "base_types.hpp"
 #include "utils.hpp"
+#include "align_vectorized.hpp"
 
 //External includes
 #include "kseq.h"
@@ -29,7 +32,6 @@ namespace psgl
    *                                find locations of the best alignment of each read
    * @tparam[in]  ScoreType         type to store scores in DP matrix
    * @param[in]   readSet           vector of input query sequences to align
-   * @param[in]   readLength
    * @param[in]   graph
    * @param[out]  bestScoreVector   vector to keep value and location of best scores,
    *                                vector size is same as count of the reads
@@ -76,7 +78,7 @@ namespace psgl
               ScoreType currentMax = 0;
 
               //see if query and ref. character match
-              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : -1 * SCORE::mismatch;
+              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : SCORE::mismatch;
 
               //match-mismatch edit
               currentMax = psgl_max (currentMax, matchScore);   //local alignment can also start with a match at this char
@@ -88,11 +90,11 @@ namespace psgl
                 //'& 1' is same as doing modulo 2
 
                 //paths with deletion edit
-                currentMax = psgl_max (currentMax, matrix[i & 1][ graph.adjcny_in[k] ] - SCORE::del);
+                currentMax = psgl_max (currentMax, matrix[i & 1][ graph.adjcny_in[k] ] + SCORE::del);
               }
 
               //insertion edit
-              currentMax = psgl_max( currentMax, matrix[(i-1) & 1][j] - SCORE::ins );
+              currentMax = psgl_max( currentMax, matrix[(i-1) & 1][j] + SCORE::ins );
 
               matrix[i & 1][j] = currentMax;
 
@@ -122,13 +124,11 @@ namespace psgl
    * @brief                         execute second phase of alignment i.e. compute cigar
    * @tparam[in]  ScoreType         type to store scores in DP matrix
    * @param[in]   readSet
-   * @param[in]   readLength
    * @param[in]   graph
    * @param[in]   bestScoreVector   best score and alignment location for each read
    * @note                          we assume that query sequences are oriented properly
    *                                after executing the alignment phase 1
    */
-
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
     void alignToDAGLocal_Phase2(  const std::vector<std::string> &readSet,
                                   const CSR_char_container<VertexIdType, EdgeIdType> &graph,
@@ -201,11 +201,11 @@ namespace psgl
               char curChar = graph.vertex_label[j + j0];
 
               //insertion edit
-              ScoreType fromInsertion = matrix[(i-1) & 1][j] - SCORE::ins;
+              ScoreType fromInsertion = matrix[(i-1) & 1][j] + SCORE::ins;
               //'& 1' is same as doing modulo 2
 
               //match-mismatch edit
-              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : -1 * SCORE::mismatch;
+              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : SCORE::mismatch;
               ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
 
               //deletion edit
@@ -217,7 +217,7 @@ namespace psgl
                 if ( graph.adjcny_in[k] >= j0)
                 {
                   fromMatch = psgl_max (fromMatch, matrix[(i-1) & 1][ graph.adjcny_in[k] - j0] + matchScore);
-                  fromDeletion = psgl_max (fromDeletion, matrix[i & 1][ graph.adjcny_in[k] - j0] - SCORE::del);
+                  fromDeletion = psgl_max (fromDeletion, matrix[i & 1][ graph.adjcny_in[k] - j0] + SCORE::del);
                 }
               }
 
@@ -271,10 +271,10 @@ namespace psgl
             char curChar = graph.vertex_label[col + j0];
 
             //insertion edit
-            ScoreType fromInsertion = aboveRowScores[col] - SCORE::ins;
+            ScoreType fromInsertion = aboveRowScores[col] + SCORE::ins;
 
             //match-mismatch edit
-            ScoreType matchScore = curChar == readSet[readno][row] ? SCORE::match : -1 * SCORE::mismatch;
+            ScoreType matchScore = curChar == readSet[readno][row] ? SCORE::match : SCORE::mismatch;
 
             ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
             std::size_t fromMatchPos = col;
@@ -295,9 +295,9 @@ namespace psgl
                   fromMatchPos = fromCol;
                 }
 
-                if (fromDeletion < currentRowScores[fromCol] - SCORE::del)
+                if (fromDeletion < currentRowScores[fromCol] + SCORE::del)
                 {
-                  fromDeletion = currentRowScores[fromCol] - SCORE::del;
+                  fromDeletion = currentRowScores[fromCol] + SCORE::del;
                   fromDeletionPos = fromCol;
                 }
               }
@@ -406,7 +406,13 @@ namespace psgl
 
 
         //align read to ref.
+#ifdef __AVX512BW__
+        std::cout << "INFO, psgl::alignToDAG, calling AVX512 vectorized verion of phase 1 \n";
+        alignToDAGLocal_Phase1_vectorized_wrapper(readSet_P1, graph, bestScoreVector_P1);
+#else
+        std::cout << "INFO, psgl::alignToDAG, calling scalar verion of phase 1 \n";
         alignToDAGLocal_Phase1(readSet_P1, graph, bestScoreVector_P1);
+#endif
 
         auto tick2 = psgl::timer::rdtsc();
         float time_p1 = (tick2 -tick1) * 1.0/ psgl::timer::cycles_per_sec();

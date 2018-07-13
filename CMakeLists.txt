@@ -26,8 +26,18 @@ ENDIF(NOT CMAKE_BUILD_TYPE)
 # Save libs and executables in the same place
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib CACHE PATH "Output directory for libraries" )
 
-#Set vtune support
+# Set vtune support
 OPTION(ENABLE_VTUNE "Turn on/off the vtune support with intel compiler" OFF)
+# Check if the user want to build google test applications
+OPTION(BUILD_TESTS "Inform whether test applications should be built" OFF)
+# Add AVX512 support
+option(BUILD_AVX512 "Support AVX512" ON)
+
+
+if (BUILD_AVX512)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xCORE-AVX512")
+endif (BUILD_AVX512)
+
 
 #Add OpenMP support
 find_package(OpenMP REQUIRED)
@@ -37,11 +47,11 @@ if (OPENMP_FOUND)
   set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
-# Check if the user want to build sample applications
-OPTION(BUILD_TESTS "Inform whether sample applications should be built" OFF)
 
-#Add googleTest support
-add_subdirectory("${PROJECT_SOURCE_DIR}/ext/googletest")
+if (BUILD_TESTS)
+  #Add googleTest support
+  add_subdirectory("${PROJECT_SOURCE_DIR}/ext/googletest")
+endif(BUILD_TESTS)
 
 
 #Configure Protobuf (path needs to be configured by each user)

@@ -30,7 +30,7 @@ TEST(localAlignment, singleQuerySequential)
 
   using VertexIdType = uint32_t;
   using EdgeIdType = uint32_t;
-  using ScoreType = int;
+  using ScoreType = int32_t;
 
   //load graph
 
@@ -66,7 +66,7 @@ TEST(localAlignment, multipleQueryParallelScore)
 
   using VertexIdType = uint32_t;
   using EdgeIdType = uint32_t;
-  using ScoreType = int;
+  using ScoreType = int32_t;
 
   //load graph
 
