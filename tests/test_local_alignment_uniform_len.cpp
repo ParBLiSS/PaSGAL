@@ -14,7 +14,7 @@
 
 /**
  * @brief   builds a graph from BRCA1 sequence and aligns
- *          16 query sequences to it in parallel.
+ *          16 query sequences to it using single thread.
  *          - All query sequences have equal length
  *          - The count 16 ensures all vector lanes are used
  *          This routine checks for alignment strands and 
@@ -97,7 +97,7 @@ TEST(localAlignment, multipleQuerySequentialUniformLength)
 
 /**
  * @brief   builds a graph from BRCA1 sequence and aligns
- *          16 query sequences to it in parallel.
+ *          16 query sequences to it using multiple threads.
  *          - All query sequences have equal length
  *          - The count 16 ensures all vector lanes are used
  *          This routine checks for alignment strands and 
