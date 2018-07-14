@@ -22,8 +22,6 @@
 
 //KSEQ_INIT(gzFile, gzread)
 
-#define psgl_max(a,b) (((a)>(b))?(a):(b))
-
 //define common SIMD operations
 #define _ZERO       _mm512_setzero_epi32()
 #define _ADD        _mm512_add_epi32
@@ -76,10 +74,10 @@ namespace psgl
       std::fill (bestRows.begin(), bestRows.end(), _ZERO);
 
       //init score simd vectors
-      __m512i match512    = _SET (SCORE::match);
-      __m512i mismatch512 = _SET (SCORE::mismatch);
-      __m512i del512      = _SET (SCORE::del);
-      __m512i ins512      = _SET (SCORE::ins);
+      __m512i match512    = _SET ((int32_t) SCORE::match);
+      __m512i mismatch512 = _SET ((int32_t) SCORE::mismatch);
+      __m512i del512      = _SET ((int32_t) SCORE::del);
+      __m512i ins512      = _SET ((int32_t) SCORE::ins);
 
 #pragma omp parallel
       {
