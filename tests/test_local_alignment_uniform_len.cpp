@@ -27,7 +27,7 @@ TEST(localAlignment, multipleQuerySequentialUniformLength)
 
   //get file name
   std::string dir = FOLDER;
-  auto rfile = dir + "/BRCA1_seq.vg";
+  auto rfile = dir + "/BRCA1_seq_graph.vg";
   auto qfile = dir + "/BRCA1_16_uniform_len.fastq";
 
   using VertexIdType = uint32_t;
@@ -110,7 +110,7 @@ TEST(localAlignment, multipleQueryParallelUniformLength)
 
   //get file name
   std::string dir = FOLDER;
-  auto rfile = dir + "/BRCA1_seq.vg";
+  auto rfile = dir + "/BRCA1_seq_graph.vg";
   auto qfile = dir + "/BRCA1_16_uniform_len.fastq";
 
   using VertexIdType = uint32_t;

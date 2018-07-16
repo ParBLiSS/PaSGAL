@@ -43,7 +43,7 @@ TEST(graphLoad, graphLoadVG)
 {
   //get file name
   std::string file = FOLDER;
-  file = file + "/BRCA1_seq.vg";
+  file = file + "/BRCA1_seq_graph.vg";
 
   using VertexIdType = uint32_t;
   using EdgeIdType = uint32_t;
