@@ -93,6 +93,10 @@ namespace psgl
         {
           size_t readBatch = readno/SIMD_WIDTH;
 
+          __m512i bestScores512 = _ZERO;
+          __m512i bestRows512   = _ZERO;
+          __m512i bestCols512   = _ZERO;
+
           //reset buffer
           std::fill(matrix[1].begin(), matrix[1].end(), _ZERO);
 
@@ -142,18 +146,23 @@ namespace psgl
               currentMax = _MAX (currentMax, insEdit);
 
               //update best score observed yet
-              bestScores[readBatch] = _MAX (currentMax, bestScores[readBatch]);
+              bestScores512 = _MAX (currentMax, bestScores512);
 
               //on which lanes is the best score updated
-              __mmask16 updated = _EQUAL (currentMax, bestScores[readBatch]);
+              __mmask16 updated = _EQUAL (currentMax, bestScores512);
 
               //update row and column values accordingly
-              bestRows[readBatch] = _SET1_MASK (bestRows[readBatch], updated, (int32_t) i); 
-              bestCols[readBatch] = _SET1_MASK (bestCols[readBatch], updated, (int32_t) j); 
+              bestRows512 = _SET1_MASK (bestRows512, updated, (int32_t) i);
+              bestCols512 = _SET1_MASK (bestCols512, updated, (int32_t) j);
 
               matrix[i & 1][j] = currentMax;
             } // end of row computation
           } // end of DP
+
+          bestScores[readBatch] = bestScores512;
+          bestRows[readBatch] = bestRows512; 
+          bestCols[readBatch] = bestCols512; 
+
         } // all reads done
       } //end of omp parallel
 
@@ -217,9 +226,9 @@ namespace psgl
                                             _bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
 
       //parse best scores from vector registers
-      std::vector<int32_t> storeScores (SIMD_WIDTH);
-      std::vector<int32_t> storeCols   (SIMD_WIDTH);
-      std::vector<int32_t> storeRows   (SIMD_WIDTH);
+      std::vector<int32_t, aligned_allocator<int32_t, 64> > storeScores (SIMD_WIDTH);
+      std::vector<int32_t, aligned_allocator<int32_t, 64> > storeCols   (SIMD_WIDTH);
+      std::vector<int32_t, aligned_allocator<int32_t, 64> > storeRows   (SIMD_WIDTH);
 
       for (size_t i = 0; i < _bestScoreVector.size(); i++)
       {

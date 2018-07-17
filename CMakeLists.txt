@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.6)
 
 # compile using intel compiler 
 # users can remove these two lines to compile with gcc
-set(CMAKE_CXX_COMPILER "icc")
+set(CMAKE_CXX_COMPILER "icpc")
 set(CMAKE_C_COMPILER "icc")
 
 # project settings
