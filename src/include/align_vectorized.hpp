@@ -101,10 +101,10 @@ namespace psgl
           std::fill(matrix[1].begin(), matrix[1].end(), _ZERO);
 
           //iterate over read length
-          for (std::size_t i = 0; i < readLength; i++)
+          for (int32_t i = 0; i < readLength; i++)
           {
             //convert read character to int32_t
-            for (int j = 0; j < SIMD_WIDTH; j++)
+            for (int32_t j = 0; j < SIMD_WIDTH; j++)
             {
               readCharsInt [j] = readSet_SOA [readno*readLength + i*SIMD_WIDTH + j];
             }
@@ -113,7 +113,7 @@ namespace psgl
             __m512i readChars = _LOAD (readCharsInt.data());
 
             //iterate over characters in reference graph
-            for (std::size_t j = 0; j < graph.numVertices; j++)
+            for (int32_t j = 0; j < graph.numVertices; j++)
             {
               //current reference character
               __m512i graphChar = _SET1 ((int32_t) graph.vertex_label[j] );
@@ -129,7 +129,7 @@ namespace psgl
               currentMax = _MAX (currentMax, sub512); //local alignment can also start with a match at this char 
 
               //iterate over graph neighbors
-              for(auto k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
+              for(size_t k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
               {
                 //paths with match mismatch edit
                 __m512i substEdit = _ADD ( matrix[(i-1) & 1][graph.adjcny_in[k]], sub512);
@@ -160,8 +160,8 @@ namespace psgl
           } // end of DP
 
           bestScores[readBatch] = bestScores512;
-          bestRows[readBatch] = bestRows512; 
-          bestCols[readBatch] = bestCols512; 
+          bestRows[readBatch]   = bestRows512; 
+          bestCols[readBatch]   = bestCols512; 
 
         } // all reads done
       } //end of omp parallel

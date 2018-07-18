@@ -42,8 +42,8 @@ int main(int argc, char **argv)
   std::cout << "INFO, psgl::main, reference file = " << rfile << " (in " << mode  << " format) " << std::endl;
   std::cout << "INFO, psgl::main, query file = " << qfile << std::endl;
 
-  using VertexIdType = uint32_t;
-  using EdgeIdType = uint32_t;
+  using VertexIdType = int32_t;
+  using EdgeIdType = int32_t;
   using ScoreType = int32_t;
 
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
