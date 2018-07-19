@@ -140,7 +140,87 @@ namespace psgl
           return 0;
         }
 
+        /**
+         * @brief             compute and print histogram of degree values
+         */
+        void printDegreeHistogram () const
+        {
+          std::cout << "Printing degree distribution ..." << "\n"; 
+
+          VertexIdType maxDegree = 0;
+
+          //compute maximum degree in the graph
+          for(VertexIdType i = 0; i < this->numVertices; i++)
+            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+              maxDegree = std::max (maxDegree, offsets_in[i+1] - offsets_in[i]);
+
+          std::vector<VertexIdType> degreeHist (maxDegree + 1, 0);
+
+          //compute histogram
+          for(VertexIdType i = 0; i < this->numVertices; i++)
+            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+              degreeHist [offsets_in[i+1] - offsets_in[i] ]++; 
+
+          for(VertexIdType i = 0; i <= maxDegree; i++)
+            if (degreeHist[i] > 0)
+              std::cout << i << " : " << degreeHist[i] << "\n"; 
+
+          std::cout.flush();
+        }
+
+        /**
+         * @brief             compute and print histogram of hop distances in 
+         *                    the sorted order
+         */
+        void printHopLengthHistogram() const
+        {
+          std::cout << "Printing hop length distribution  ..." << "\n"; 
+
+          //get maximum hop length
+          VertexIdType maxHopLength = this->directedBandwidth();
+
+          std::vector<VertexIdType> hopLengthHist (maxHopLength + 1, 0);
+
+          //compute histogram
+          for(VertexIdType i = 0; i < this->numVertices; i++)
+            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+              hopLengthHist [ i - adjcny_in[j] ] ++;
+
+          for(VertexIdType i = 0; i <= maxHopLength; i++)
+            if (hopLengthHist[i] > 0)
+              std::cout << i << " : " << hopLengthHist[i] << "\n"; 
+
+          std::cout.flush();
+        }
+
       private:
+
+        /**
+         * @brief                   compute maximum distance between connected vertices in the graph (a.k.a. 
+         *                          directed bandwidth)
+         * @return                  directed graph bandwidth
+         */
+        std::size_t directedBandwidth() const
+        {
+          std::size_t bandwidth = 0;   //temporary value 
+
+          //iterate over all vertices in graph to compute bandwidth
+          for(VertexIdType i = 0; i < this->numVertices; i++)
+          {
+            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+            {
+              auto from_pos = adjcny_in[j];
+              auto to_pos = i;
+
+              assert(to_pos > from_pos);
+
+              if (to_pos - from_pos > bandwidth)
+                bandwidth = to_pos - from_pos;
+            }
+          }
+
+          return bandwidth;
+        }
 
 
         /**

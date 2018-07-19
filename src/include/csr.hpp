@@ -418,53 +418,6 @@ namespace psgl
         }
 
         /**
-         * @brief                   compute maximum distance between connected vertices in the graph (a.k.a. 
-         *                          directed bandwidth), while noting that each node is a chain of characters
-         * @return                  directed graph bandwidth
-         * @details                 output of this fn decides the maximum count of prior columns we need during DP 
-         */
-        std::size_t directedBandwidth() const
-        {
-          std::size_t bandwidth = 0;   //temporary value 
-
-          std::pair<VertexIdType, VertexIdType> logFarthestVertices;
-
-          //iterate over all vertices in graph to compute bandwidth
-          for(VertexIdType i = 0; i < this->numVertices; i++)
-          {
-            //iterate over neighbors of vertex i
-            for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
-            {
-              auto from_pos = i;
-              auto to_pos = adjcny_out[j];
-
-              //for a valid topological sort order
-              assert(to_pos > from_pos);
-
-              //now the bandwidth between vertex i and its neighbor equals
-              //(to_pos - from_pos) plus the width of intermediate vertices
-
-              std::size_t tmp_bandwidth = to_pos - from_pos;
-
-              for(auto k = from_pos + 1; k < to_pos; k++)
-                tmp_bandwidth += vertex_metadata[k].length() - 1;
-
-              if(tmp_bandwidth > bandwidth)
-              {
-                bandwidth = tmp_bandwidth;
-                logFarthestVertices = std::make_pair(i, adjcny_out[j]);
-              }
-            }
-          }
-
-#ifdef DEBUG
-          std::cerr << "DEBUG, psgl::CSR_container::directedBandwidth, Bandwidth deciding vertices = " << logFarthestVertices.first << ", " << logFarthestVertices.second << std::endl;
-#endif
-
-          return bandwidth;
-        }
-
-        /**
          * @brief                   get all in-neighbor vertices of a vertex
          * @param[in]   v
          * @param[out]  vec
@@ -556,6 +509,53 @@ namespace psgl
         }
 
       private:
+
+        /**
+         * @brief                   compute maximum distance between connected vertices in the graph (a.k.a. 
+         *                          directed bandwidth), while noting that each node is a chain of characters
+         * @return                  directed graph bandwidth
+         * @details                 output of this fn decides the maximum count of prior columns we need during DP 
+         */
+        std::size_t directedBandwidth() const
+        {
+          std::size_t bandwidth = 0;   //temporary value 
+
+          std::pair<VertexIdType, VertexIdType> logFarthestVertices;
+
+          //iterate over all vertices in graph to compute bandwidth
+          for(VertexIdType i = 0; i < this->numVertices; i++)
+          {
+            //iterate over neighbors of vertex i
+            for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
+            {
+              auto from_pos = i;
+              auto to_pos = adjcny_out[j];
+
+              //for a valid topological sort order
+              assert(to_pos > from_pos);
+
+              //now the bandwidth between vertex i and its neighbor equals
+              //(to_pos - from_pos) plus the width of intermediate vertices
+
+              std::size_t tmp_bandwidth = to_pos - from_pos;
+
+              for(auto k = from_pos + 1; k < to_pos; k++)
+                tmp_bandwidth += vertex_metadata[k].length() - 1;
+
+              if(tmp_bandwidth > bandwidth)
+              {
+                bandwidth = tmp_bandwidth;
+                logFarthestVertices = std::make_pair(i, adjcny_out[j]);
+              }
+            }
+          }
+
+#ifdef DEBUG
+          std::cerr << "DEBUG, psgl::CSR_container::directedBandwidth, Bandwidth deciding vertices = " << logFarthestVertices.first << ", " << logFarthestVertices.second << std::endl;
+#endif
+
+          return bandwidth;
+        }
 
         /**
          * @brief                   compute topological sort order using several runs

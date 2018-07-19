@@ -59,9 +59,12 @@ int main(int argc, char **argv)
   }
 
   std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
 #ifdef DEBUG
+  g.diCharGraph.printDegreeHistogram();
+  g.diCharGraph.printHopLengthHistogram();
   g.printGraph();
 #endif
 }
