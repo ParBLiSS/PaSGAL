@@ -37,213 +37,281 @@
 
 namespace psgl
 {
-  /**
-   * @brief                         execute first phase of alignment i.e. compute DP and 
-   *                                find locations of the best alignment of each read
-   * @param[in]   readSet_SOA       read characters arranged as S.O.A. for vectorization
-   * @param[in]   graph
-   * @param[out]  bestScores        best DP scores of reads
-   * @param[out]  bestCols          columns where best alignment ends (for traceback later)
-   * @param[out]  bestRows          rows where best alignment ends
-   */
-  template <typename AlignedVecType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGLocal_Phase1_vectorized( size_t readCount, size_t readLength,
-                                            const std::vector<char> &readSet_SOA,
-                                            const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-                                            AlignedVecType &bestScores,
-                                            AlignedVecType &bestCols,
-                                            AlignedVecType &bestRows)
+  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
+    class Phase1_Vectorized
     {
-      //few checks
-      assert (bestScores.size() == readCount / SIMD_WIDTH);
-      assert (bestCols.size() == readCount / SIMD_WIDTH);
-      assert (bestRows.size() == readCount / SIMD_WIDTH);
-      assert (readSet_SOA.size() == readCount * readLength);
-      assert (readCount % SIMD_WIDTH == 0);
+      private:
+
+        //input reads
+        const std::vector<std::string> &readSet;
+
+        //reference graph
+        const CSR_char_container<VertexIdType, EdgeIdType> &graph;
+
+        //small temporary storage buffer for DP scores
+        const int8_t smallBufferWidth = 4;       
+
+        //process these many vertical cells in a go
+        const int8_t verticalMatrixLength = 4;   
+
+        //for converting input reads into SOA to enable vectorization
+        std::vector<char>  readSet_SOA;
+
+        // pre-compute which graph vertices are connected with hop longer
+        // than 'smallBufferWidth'
+        std::vector<bool> withLongHop;
+
+      public:
+
+        /**
+         * @brief                   public constructor
+         * @param[in]   readSet     vector of input query sequences to align
+         * @param[in]   g           input reference graph
+         */
+        Phase1_Vectorized(const std::vector<std::string> &readSet, 
+            const CSR_char_container<VertexIdType, EdgeIdType> &g) :
+          readSet (readSet), graph (g)
+        {
+          //Type checks
+          static_assert(std::is_same<ScoreType, int32_t>::value, "ScoreType needs to be int32_t for now");
+          assert (sizeof(VertexIdType) <= 32);
+
+          this->convertToSOA();
+          this->computeLongHops();
+        };
+
+        /**
+         * @brief                                 wrapper function for phase 1 routine 
+         * @param[out]  outputBestScoreVector     vector to keep value and location of best scores,
+         *                                        vector size is same as count of the reads
+         * @note                                  reverse complement of reads are not handled
+         *                                        inside this class
+         */
+        template <typename Vec>
+          void alignToDAGLocal_Phase1_vectorized_wrapper(Vec &outputBestScoreVector) const
+          {
+            assert (outputBestScoreVector.size() == readSet.size());
+
+            // modified containers to hold best-score info
+            // vector elements aligned to 64 byte boundaries
+            std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreVector (readSet.size() / SIMD_WIDTH);
+            std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreColVector (readSet.size() / SIMD_WIDTH);
+            std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreRowVector (readSet.size() / SIMD_WIDTH);
+
+            this->alignToDAGLocal_Phase1_vectorized (_bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
+
+            //parse best scores from vector registers
+            std::vector<int32_t, aligned_allocator<int32_t, 64> > storeScores (SIMD_WIDTH);
+            std::vector<int32_t, aligned_allocator<int32_t, 64> > storeCols   (SIMD_WIDTH);
+            std::vector<int32_t, aligned_allocator<int32_t, 64> > storeRows   (SIMD_WIDTH);
+
+            for (size_t i = 0; i < _bestScoreVector.size(); i++)
+            {
+              _STORE (storeScores.data(), _bestScoreVector[i]);
+              _STORE (storeCols.data(), _bestScoreColVector[i]);
+              _STORE (storeRows.data(), _bestScoreRowVector[i]);
+
+              for (size_t j = 0; j < SIMD_WIDTH; j++)
+              {
+                outputBestScoreVector [i*SIMD_WIDTH + j].score = storeScores[j];
+                outputBestScoreVector [i*SIMD_WIDTH + j].refColumn = storeCols[j];
+                outputBestScoreVector [i*SIMD_WIDTH + j].qryRow = storeRows[j];
+              }
+            }
+          }
+
+      private:
+
+        /**
+         * @brief       convert input reads characters into SOA to enable vectorization
+         */
+        void convertToSOA()
+        {
+          assert (readSet.size() > 0);
+          assert (readSet_SOA.size() == 0);
+
+          auto qLen = readSet[0].length();
+
+          //assuming all read lengths are equal
+          for (auto &read : readSet)
+            assert (qLen == read.length());
+
+          //assuming read lengths are multiple of vertical blocking length
+          assert (qLen % verticalMatrixLength == 0);
+
+          //assuming count of reads is a multiple of SIMD_WIDTH
+          assert (readSet.size() % SIMD_WIDTH == 0);
+
+          //make space to save read charaacters
+          readSet_SOA.resize ( readSet.size() * qLen);
+
+          //re-arrange read characters for vectorized processing; SIMD_WIDTH reads at a time
+          for (size_t readno = 0; readno < readSet.size(); readno += SIMD_WIDTH)
+            for (size_t i = 0; i < qLen; i++)
+              for (size_t j = 0; j < SIMD_WIDTH; j++)
+                readSet_SOA [readno * qLen + i * SIMD_WIDTH + j] = readSet[readno + j][i];
+        }
+
+        /**
+         * @brief     precompute which vertices are connected with long edge hops
+         *            i.e. longer than 'smallBufferWidth'
+         */
+        void computeLongHops()
+        {
+          assert (withLongHop.size() == 0);
+
+          this->withLongHop.resize(graph.numVertices, false);
+
+          for(VertexIdType i = 0; i < graph.numVertices; i++)
+          {
+            for(auto j = graph.offsets_in[i]; j < graph.offsets_in[i+1]; j++)
+            {
+              auto from_pos = graph.adjcny_in[j];
+              auto to_pos = i;
+
+              //compare hop distance to 'smallBufferWidth'
+              if (to_pos - from_pos > this->smallBufferWidth)
+                this->withLongHop[from_pos] = true;
+            }
+          }
+        }
+
+        /**
+         * @brief                         execute first phase of alignment i.e. compute DP and 
+         *                                find locations of the best alignment of each read
+         * @param[out]  bestScores        best DP scores of reads
+         * @param[out]  bestCols          columns where best alignment ends (for traceback later)
+         * @param[out]  bestRows          rows where best alignment ends
+         */
+        template <typename Vec>
+          void alignToDAGLocal_Phase1_vectorized (Vec &bestScores, Vec &bestCols, Vec &bestRows) const
+          {
+            size_t readCount = readSet.size();
+            size_t readLength = readSet[0].length();
+
+            //few checks
+            assert (bestScores.size() == readCount / SIMD_WIDTH);
+            assert (bestCols.size() == readCount / SIMD_WIDTH);
+            assert (bestRows.size() == readCount / SIMD_WIDTH);
+            assert (readSet_SOA.size() == readCount * readLength);
+            assert (readCount % SIMD_WIDTH == 0);
 
 #ifdef VTUNE_SUPPORT
-      __itt_resume();
+            __itt_resume();
 #endif
 
-      //for time profiling within phase 1
-      auto tick1 = __rdtsc();
+            //for time profiling within phase 1
+            auto tick1 = __rdtsc();
 
-      //init best score vector to zero bits
-      std::fill (bestScores.begin(), bestScores.end(), _ZERO);
-      std::fill (bestCols.begin(), bestCols.end(), _ZERO);
-      std::fill (bestRows.begin(), bestRows.end(), _ZERO);
+            //init best score vector to zero bits
+            std::fill (bestScores.begin(), bestScores.end(), _ZERO);
+            std::fill (bestCols.begin(), bestCols.end(), _ZERO);
+            std::fill (bestRows.begin(), bestRows.end(), _ZERO);
 
-      //init score simd vectors
-      __m512i match512    = _SET1 ((int32_t) SCORE::match);
-      __m512i mismatch512 = _SET1 ((int32_t) SCORE::mismatch);
-      __m512i del512      = _SET1 ((int32_t) SCORE::del);
-      __m512i ins512      = _SET1 ((int32_t) SCORE::ins);
+            //init score simd vectors
+            __m512i match512    = _SET1 ((int32_t) SCORE::match);
+            __m512i mismatch512 = _SET1 ((int32_t) SCORE::mismatch);
+            __m512i del512      = _SET1 ((int32_t) SCORE::del);
+            __m512i ins512      = _SET1 ((int32_t) SCORE::ins);
 
 #pragma omp parallel
-      {
-        //initialize 2D vector called matrix of size 2 x graph size
-        std::vector< AlignedVecType > matrix(2, AlignedVecType(graph.numVertices));
+            {
+              //initialize 2D vector called matrix of size 2 x graph size
+              using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
+              std::vector< AlignedVecType > matrix(2, AlignedVecType(graph.numVertices));
 
-        //buffer to save read charactes
-        std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH);
+              //buffer to save read charactes
+              std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH);
 
-        //process SIMD_WIDTH reads in a single iteration
+              //process SIMD_WIDTH reads in a single iteration
 #pragma omp for
-        for (size_t readno = 0; readno < readCount; readno += SIMD_WIDTH)
-        {
-          size_t readBatch = readno/SIMD_WIDTH;
-
-          __m512i bestScores512 = _ZERO;
-          __m512i bestRows512   = _ZERO;
-          __m512i bestCols512   = _ZERO;
-
-          //reset buffer
-          std::fill(matrix[1].begin(), matrix[1].end(), _ZERO);
-
-          //iterate over read length
-          for (int32_t i = 0; i < readLength; i++)
-          {
-            //convert read character to int32_t
-            for (int32_t j = 0; j < SIMD_WIDTH; j++)
-            {
-              readCharsInt [j] = readSet_SOA [readno*readLength + i*SIMD_WIDTH + j];
-            }
-
-            //load read characters
-            __m512i readChars = _LOAD (readCharsInt.data());
-
-            //iterate over characters in reference graph
-            for (int32_t j = 0; j < graph.numVertices; j++)
-            {
-              //current reference character
-              __m512i graphChar = _SET1 ((int32_t) graph.vertex_label[j] );
-
-              //current best score, init to 0
-              __m512i currentMax = _ZERO;
-
-              //see if query and reference character match
-              __mmask16 compareChar = _EQUAL (readChars, graphChar);
-              __m512i sub512 = _BLEND (compareChar, mismatch512, match512);
-
-              //match-mismatch edit
-              currentMax = _MAX (currentMax, sub512); //local alignment can also start with a match at this char 
-
-              //iterate over graph neighbors
-              for(size_t k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
+              for (size_t readno = 0; readno < readCount; readno += SIMD_WIDTH)
               {
-                //paths with match mismatch edit
-                __m512i substEdit = _ADD ( matrix[(i-1) & 1][graph.adjcny_in[k]], sub512);
-                currentMax = _MAX (currentMax, substEdit); 
-                //'& 1' is same as doing modulo 2
+                size_t readBatch = readno/SIMD_WIDTH;
 
-                //paths with deletion edit
-                __m512i delEdit = _ADD ( matrix[i & 1][graph.adjcny_in[k]], del512);
-                currentMax = _MAX (currentMax, delEdit); 
-              }
+                __m512i bestScores512 = _ZERO;
+                __m512i bestRows512   = _ZERO;
+                __m512i bestCols512   = _ZERO;
 
-              //insertion edit
-              __m512i insEdit = _ADD (matrix[(i-1) & 1][j], ins512);
-              currentMax = _MAX (currentMax, insEdit);
+                //reset buffer
+                std::fill(matrix[1].begin(), matrix[1].end(), _ZERO);
 
-              //update best score observed yet
-              bestScores512 = _MAX (currentMax, bestScores512);
+                //iterate over read length
+                for (int32_t i = 0; i < readLength; i++)
+                {
+                  //convert read character to int32_t
+                  for (int32_t j = 0; j < SIMD_WIDTH; j++)
+                  {
+                    readCharsInt [j] = readSet_SOA [readno*readLength + i*SIMD_WIDTH + j];
+                  }
 
-              //on which lanes is the best score updated
-              __mmask16 updated = _EQUAL (currentMax, bestScores512);
+                  //load read characters
+                  __m512i readChars = _LOAD (readCharsInt.data());
 
-              //update row and column values accordingly
-              bestRows512 = _SET1_MASK (bestRows512, updated, (int32_t) i);
-              bestCols512 = _SET1_MASK (bestCols512, updated, (int32_t) j);
+                  //iterate over characters in reference graph
+                  for (int32_t j = 0; j < graph.numVertices; j++)
+                  {
+                    //current reference character
+                    __m512i graphChar = _SET1 ((int32_t) graph.vertex_label[j] );
 
-              matrix[i & 1][j] = currentMax;
-            } // end of row computation
-          } // end of DP
+                    //current best score, init to 0
+                    __m512i currentMax = _ZERO;
 
-          bestScores[readBatch] = bestScores512;
-          bestRows[readBatch]   = bestRows512; 
-          bestCols[readBatch]   = bestCols512; 
+                    //see if query and reference character match
+                    __mmask16 compareChar = _EQUAL (readChars, graphChar);
+                    __m512i sub512 = _BLEND (compareChar, mismatch512, match512);
 
-        } // all reads done
-      } //end of omp parallel
+                    //match-mismatch edit
+                    currentMax = _MAX (currentMax, sub512); //local alignment can also start with a match at this char 
 
-      auto tick2 = __rdtsc();
+                    //iterate over graph neighbors
+                    for(size_t k = graph.offsets_in[j]; k < graph.offsets_in[j+1]; k++)
+                    {
+                      //paths with match mismatch edit
+                      __m512i substEdit = _ADD ( matrix[(i-1) & 1][graph.adjcny_in[k]], sub512);
+                      currentMax = _MAX (currentMax, substEdit); 
+                      //'& 1' is same as doing modulo 2
 
-      std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_vectorized, CPU cycles spent in phase 1 (without wrapper) = " << tick2 - tick1
-                << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
+                      //paths with deletion edit
+                      __m512i delEdit = _ADD ( matrix[i & 1][graph.adjcny_in[k]], del512);
+                      currentMax = _MAX (currentMax, delEdit); 
+                    }
+
+                    //insertion edit
+                    __m512i insEdit = _ADD (matrix[(i-1) & 1][j], ins512);
+                    currentMax = _MAX (currentMax, insEdit);
+
+                    //update best score observed yet
+                    bestScores512 = _MAX (currentMax, bestScores512);
+
+                    //on which lanes is the best score updated
+                    __mmask16 updated = _EQUAL (currentMax, bestScores512);
+
+                    //update row and column values accordingly
+                    bestRows512 = _SET1_MASK (bestRows512, updated, (int32_t) i);
+                    bestCols512 = _SET1_MASK (bestCols512, updated, (int32_t) j);
+
+                    matrix[i & 1][j] = currentMax;
+                  } // end of row computation
+                } // end of DP
+
+                bestScores[readBatch] = bestScores512;
+                bestRows[readBatch]   = bestRows512; 
+                bestCols[readBatch]   = bestCols512; 
+
+              } // all reads done
+            } //end of omp parallel
+
+            auto tick2 = __rdtsc();
+
+            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_vectorized, CPU cycles spent in phase 1 (without wrapper) = " << tick2 - tick1
+              << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
 
 #ifdef VTUNE_SUPPORT
-        __itt_pause();
+            __itt_pause();
 #endif
-    }
-
-  /**
-   * @brief                                 wrapper function for phase 1 routine 
-   * @tparam[in]  ScoreType                 a signed numeric type to store scores in DP matrix
-   * @param[in]   readSet                   vector of input query sequences to align
-   * @param[in]   graph
-   * @param[out]  outputBestScoreVector     vector to keep value and location of best scores,
-   *                                        vector size is same as count of the reads
-   * @note                                  reverse complement of the read is not handled here
-   */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGLocal_Phase1_vectorized_wrapper( const std::vector<std::string> &readSet,
-        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-        std::vector< BestScoreInfo<ScoreType, VertexIdType> > &outputBestScoreVector)
-    {
-      /**
-       * Assumptions for now:
-       *  - count of reads is a multiple of SIMD_WIDTH
-       *  - all read lengths are equal
-       */
-      static_assert(std::is_same<ScoreType, int32_t>::value, "ScoreType needs to be int32_t for now");
-      assert (readSet.size() > 0);
-      assert (readSet.size() % SIMD_WIDTH == 0);
-      assert (outputBestScoreVector.size() == readSet.size());
-      auto qLen = readSet[0].length();
-      for (auto &read : readSet)
-        assert (qLen == read.length());
-
-      //Convert input read vector into SOA for vectorization
-      std::vector<char>  readSet_SOA ( readSet.size() * qLen);
-
-      //re-arrange read characters for vectorized processing; SIMD_WIDTH reads at a time
-      for (size_t readno = 0; readno < readSet.size(); readno += SIMD_WIDTH)
-        for (size_t i = 0; i < qLen; i++)
-          for (size_t j = 0; j < SIMD_WIDTH; j++)
-            readSet_SOA [readno * qLen + i * SIMD_WIDTH + j] = readSet[readno + j][i];
-
-      //Assumption
-      assert (sizeof(VertexIdType) <= 32);
-
-      // modified containers to hold best-score info
-      // vector elements aligned to 64 byte boundaries
-      std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreVector (readSet.size() / SIMD_WIDTH);
-      std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreColVector (readSet.size() / SIMD_WIDTH);
-      std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreRowVector (readSet.size() / SIMD_WIDTH);
-
-      alignToDAGLocal_Phase1_vectorized<> ( readSet.size(), qLen,
-                                            readSet_SOA, graph, 
-                                            _bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
-
-      //parse best scores from vector registers
-      std::vector<int32_t, aligned_allocator<int32_t, 64> > storeScores (SIMD_WIDTH);
-      std::vector<int32_t, aligned_allocator<int32_t, 64> > storeCols   (SIMD_WIDTH);
-      std::vector<int32_t, aligned_allocator<int32_t, 64> > storeRows   (SIMD_WIDTH);
-
-      for (size_t i = 0; i < _bestScoreVector.size(); i++)
-      {
-        _STORE (storeScores.data(), _bestScoreVector[i]);
-        _STORE (storeCols.data(), _bestScoreColVector[i]);
-        _STORE (storeRows.data(), _bestScoreRowVector[i]);
-
-        for (size_t j = 0; j < SIMD_WIDTH; j++)
-        {
-          outputBestScoreVector [i*SIMD_WIDTH + j].score = storeScores[j];
-          outputBestScoreVector [i*SIMD_WIDTH + j].refColumn = storeCols[j];
-          outputBestScoreVector [i*SIMD_WIDTH + j].qryRow = storeRows[j];
-        }
-      }
-    }
+          }
+    };
 }
 
 #undef _ZERO     

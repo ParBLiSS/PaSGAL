@@ -405,7 +405,8 @@ namespace psgl
 
         //align read to ref.
 #ifdef __AVX512BW__
-        alignToDAGLocal_Phase1_vectorized_wrapper(readSet_P1, graph, bestScoreVector_P1);
+        Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType> obj (readSet_P1, graph); 
+        obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
 #else
         alignToDAGLocal_Phase1_scalar(readSet_P1, graph, bestScoreVector_P1);
 #endif
