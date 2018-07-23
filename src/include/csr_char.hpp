@@ -222,7 +222,6 @@ namespace psgl
           return bandwidth;
         }
 
-
         /**
          * @brief     sanity check for correctness of graph storage in CSR format
          */

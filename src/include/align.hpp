@@ -445,7 +445,9 @@ namespace psgl
         assert (outputBestScoreVector.size() == readSet.size() );
         assert (readSet_P2.size() == readSet.size() );
 
+#ifndef VTUNE_SUPPORT
         alignToDAGLocal_Phase2(readSet_P2, graph, outputBestScoreVector);
+#endif
 
         auto tick2 = __rdtsc();
         std::cout << "TIMER, psgl::alignToDAG, CPU cycles spent in phase 2  = " << tick2 - tick1
