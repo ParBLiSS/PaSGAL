@@ -326,21 +326,21 @@ namespace psgl
                           //paths with match mismatch edit
                           __m512i substEdit;
 
-                          if (j - graph.adjcny_in[l] < smallBufferWidth)
-                            substEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] % smallBufferWidth][k-1], sub512);
-                          else
-                            substEdit = _ADD ( fartherColumns[graph.adjcny_in[l]][k-1], sub512);
-
-                          currentMax = _MAX (currentMax, substEdit); 
-
                           //paths with deletion edit
                           __m512i delEdit;
 
                           if (j - graph.adjcny_in[l] < smallBufferWidth)
+                          {
+                            substEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] % smallBufferWidth][k-1], sub512);
                             delEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] % smallBufferWidth][k], del512);
+                          }
                           else
+                          {
+                            substEdit = _ADD ( fartherColumns[graph.adjcny_in[l]][k-1], sub512);
                             delEdit = _ADD ( fartherColumns[graph.adjcny_in[l]][k], del512);
+                          }
 
+                          currentMax = _MAX (currentMax, substEdit); 
                           currentMax = _MAX (currentMax, delEdit); 
                         }
 
@@ -363,7 +363,7 @@ namespace psgl
                       nearbyColumns[j % smallBufferWidth][k] = currentMax;
 
                       //save current score in large buffer if connected thru long hop
-                      if (withLongHop[j])
+                      if ( this->withLongHop[j] )
                         fartherColumns[j][k] = currentMax;
 
                       //save last score for next row-wise iteration
