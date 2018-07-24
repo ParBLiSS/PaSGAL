@@ -31,7 +31,7 @@ TEST(graphLoad, graphLoadTxt)
   auto &graph = g.diCharGraph;
 
   ASSERT_EQ(graph.numVertices, 139189); 
-  ASSERT_EQ(graph.numEdges, 139188); 
+  ASSERT_EQ(graph.numEdges, 139189); 
 }
 
 /**

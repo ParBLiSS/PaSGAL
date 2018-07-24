@@ -308,7 +308,7 @@ namespace psgl
                           __m512i delEdit;
 
                           if (j - graph.adjcny_in[l] < smallBufferWidth)
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] % smallBufferWidth][k], del512);
+                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] & (smallBufferWidth-1) ][k], del512);
                           else
                             delEdit = _ADD ( fartherColumns[graph.adjcny_in[l]][k], del512);
 
@@ -331,8 +331,8 @@ namespace psgl
 
                           if (j - graph.adjcny_in[l] < smallBufferWidth)
                           {
-                            substEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] % smallBufferWidth][k-1], sub512);
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] % smallBufferWidth][k], del512);
+                            substEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] & (smallBufferWidth-1)][k-1], sub512);
+                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[l] & (smallBufferWidth-1)][k], del512);
                           }
                           else
                           {
@@ -345,7 +345,7 @@ namespace psgl
                         }
 
                         //insertion edit
-                        __m512i insEdit = _ADD (nearbyColumns[j % smallBufferWidth][k-1], ins512);
+                        __m512i insEdit = _ADD (nearbyColumns[j & (smallBufferWidth-1)][k-1], ins512);
                         currentMax = _MAX (currentMax, insEdit);
                       }
 
@@ -360,7 +360,7 @@ namespace psgl
                       bestCols512 = _SET1_MASK (bestCols512, updated, (int32_t) j);
 
                       //save current score in small buffer
-                      nearbyColumns[j % smallBufferWidth][k] = currentMax;
+                      nearbyColumns[j & (smallBufferWidth-1)][k] = currentMax;
 
                       //save current score in large buffer if connected thru long hop
                       if ( this->withLongHop[j] )
