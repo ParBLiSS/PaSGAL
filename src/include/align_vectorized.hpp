@@ -48,11 +48,11 @@ namespace psgl
 
         //small temporary storage buffer for DP scores
         //should be a power of 2
-        const size_t smallBufferWidth = 8; 
+        static constexpr size_t smallBufferWidth = 8; 
 
         //process these many vertical cells in a go
         //should be a power of 2
-        const size_t matrixHeight = 4;   
+        static constexpr size_t matrixHeight = 4;   
 
         //for converting input reads into SOA to enable vectorization
         std::vector<char>  readSet_SOA;
