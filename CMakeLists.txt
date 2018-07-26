@@ -53,18 +53,30 @@ if (BUILD_TESTS)
 endif(BUILD_TESTS)
 
 
-#Configure Protobuf (path needs to be configured by each user)
-#TODO: automate generation of protobuf cpp file
-set(PROTOBUF_INCLUDE_DIRS "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/include")
-set(PROTOBUF_LIBRARY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/lib/libprotobuf.so")
-include_directories(${PROTOBUF_INCLUDE_DIRS})
-add_library(vg_protobuf "${PROJECT_SOURCE_DIR}/ext/vg.pb.cc")
+#Let cmake look for protobuf by itself
+find_package(Protobuf REQUIRED)
+
+if (NOT Protobuf_FOUND AND NOT PROTOBUF_FOUND)
+  message(STATUS "CMake's package locator could not find protobuf library, using hard coded paths")
+
+#Configure Protobuf paths
+  set(PROTOBUF_INCLUDE_DIR "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/include")
+  set(PROTOBUF_LIBRARY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/lib/libprotobuf.so")
+  set(PROTOBUF_PROTOC_EXECUTABLE "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/bin/protoc")
+  find_package(Protobuf QUIET)
+endif()
+
+#generate C++ proto files
+include_directories(${PROTOBUF_INCLUDE_DIR})
+PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS "${PROJECT_SOURCE_DIR}/ext/vg.proto")
+add_library(vg_protobuf "vg.pb.cc")
 
 #include external header files
 include_directories("${PROJECT_SOURCE_DIR}/ext")
 
 #include our own directories
 include_directories("${PROJECT_SOURCE_DIR}/src/include")
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_subdirectory("${PROJECT_SOURCE_DIR}/tests")
 
 #### For vtune support
