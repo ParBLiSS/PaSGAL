@@ -45,10 +45,15 @@ endif(BUILD_TESTS)
 
 message(STATUS "Warning: Using hard coded paths to locate protobuf library")
 
-#Configure Protobuf paths
-set(PROTOBUF_INCLUDE_DIR "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/include")
-set(PROTOBUF_LIBRARY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/lib/libprotobuf.so")
-set(PROTOBUF_PROTOC_EXECUTABLE "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/bin/protoc")
+############
+#Configure PROTOBUF installation directory 
+set(PROTOBUF_INSTALL_DIRECTORY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0")
+############
+
+
+set(PROTOBUF_INCLUDE_DIR "${PROTOBUF_INSTALL_DIRECTORY}/include")
+set(PROTOBUF_LIBRARY "${PROTOBUF_INSTALL_DIRECTORY}/lib/libprotobuf.so")
+set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_INSTALL_DIRECTORY}/bin/protoc")
 find_package(Protobuf REQUIRED)
 
 #generate C++ proto files
