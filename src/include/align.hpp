@@ -413,7 +413,7 @@ namespace psgl
 
         auto tick2 = __rdtsc();
         std::cout << "TIMER, psgl::alignToDAG, CPU cycles spent in phase 1  = " << tick2 - tick1
-                  << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
+                  << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << std::endl;
       }
 
       //
