@@ -9,7 +9,7 @@ set(CMAKE_C_COMPILER "icc")
 project(PaSGAL)
 
 ##### General Compilation Settings
-set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS} --std=c++11")
+set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS} --std=c++11 -fopenmp")
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
@@ -32,39 +32,24 @@ OPTION(BUILD_TESTS "Inform whether test applications should be built" OFF)
 # Add AVX512 support
 option(BUILD_AVX512 "Support AVX512" ON)
 
-
+#compiler flag to enable AVX512 simd instructions
 if (BUILD_AVX512)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xCORE-AVX512")
 endif (BUILD_AVX512)
 
-
-#Add OpenMP support
-find_package(OpenMP REQUIRED)
-if (OPENMP_FOUND)
-  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-  set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
-
-
+#compile testing code
 if (BUILD_TESTS)
   #Add googleTest support
   add_subdirectory("${PROJECT_SOURCE_DIR}/ext/googletest")
 endif(BUILD_TESTS)
 
-
-#Let cmake look for protobuf by itself
-find_package(Protobuf REQUIRED)
-
-if (NOT Protobuf_FOUND AND NOT PROTOBUF_FOUND)
-  message(STATUS "CMake's package locator could not find protobuf library, using hard coded paths")
+message(STATUS "Warning: Using hard coded paths to locate protobuf library")
 
 #Configure Protobuf paths
-  set(PROTOBUF_INCLUDE_DIR "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/include")
-  set(PROTOBUF_LIBRARY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/lib/libprotobuf.so")
-  set(PROTOBUF_PROTOC_EXECUTABLE "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/bin/protoc")
-  find_package(Protobuf QUIET)
-endif()
+set(PROTOBUF_INCLUDE_DIR "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/include")
+set(PROTOBUF_LIBRARY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/lib/libprotobuf.so")
+set(PROTOBUF_PROTOC_EXECUTABLE "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0/bin/protoc")
+find_package(Protobuf REQUIRED)
 
 #generate C++ proto files
 include_directories(${PROTOBUF_INCLUDE_DIR})
@@ -81,6 +66,7 @@ add_subdirectory("${PROJECT_SOURCE_DIR}/tests")
 
 #### For vtune support
 if(ENABLE_VTUNE)
+  #Configure path to vtune_amplifier library 
   include_directories("/opt/intel/vtune_amplifier_2018/include")
   set(VTUNE_LIBRARY "/opt/intel/vtune_amplifier_2018/lib64/libittnotify.a")
   add_definitions(-DVTUNE_SUPPORT)
