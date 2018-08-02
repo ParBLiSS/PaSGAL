@@ -20,7 +20,7 @@
  *          This routine checks for alignment strands and 
  *          scores
  **/
-TEST(localAlignment, multipleQuerySequentialUniformLength_vg) 
+TEST(localAlignmentUniformLen, multipleQuerySequentialUniformLength_vg) 
 {
   //Run sequentially
   omp_set_num_threads( 1 ); 
@@ -39,7 +39,7 @@ TEST(localAlignment, multipleQuerySequentialUniformLength_vg)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromVG(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
@@ -103,7 +103,7 @@ TEST(localAlignment, multipleQuerySequentialUniformLength_vg)
  *          This routine checks for alignment strands and 
  *          scores
  **/
-TEST(localAlignment, multipleQuerySequentialUniformLength_txt) 
+TEST(localAlignmentUniformLen, multipleQuerySequentialUniformLength_txt) 
 {
   //Run sequentially
   omp_set_num_threads( 1 ); 
@@ -122,7 +122,7 @@ TEST(localAlignment, multipleQuerySequentialUniformLength_txt)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromTxt(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
@@ -186,7 +186,7 @@ TEST(localAlignment, multipleQuerySequentialUniformLength_txt)
  *          This routine checks for alignment strands and 
  *          scores
  **/
-TEST(localAlignment, multipleQueryParallelUniformLength_vg) 
+TEST(localAlignmentUniformLen, multipleQueryParallelUniformLength_vg) 
 {
   //Run in parallel
   omp_set_num_threads( 8 ); 
@@ -205,7 +205,7 @@ TEST(localAlignment, multipleQueryParallelUniformLength_vg)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromVG(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
@@ -269,7 +269,7 @@ TEST(localAlignment, multipleQueryParallelUniformLength_vg)
  *          This routine checks for alignment strands and 
  *          scores
  **/
-TEST(localAlignment, multipleQueryParallelUniformLength_txt) 
+TEST(localAlignmentUniformLen, multipleQueryParallelUniformLength_txt) 
 {
   //Run in parallel
   omp_set_num_threads( 8 ); 
@@ -288,7 +288,7 @@ TEST(localAlignment, multipleQueryParallelUniformLength_txt)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromTxt(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system

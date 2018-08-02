@@ -78,6 +78,18 @@ namespace psgl
     }
 
     /**
+     * @brief   reverse string
+     * @note    assumes dest is pre-allocated
+     */
+    void reverse(const std::string &src, std::string &dest) 
+    {
+      assert(src.length() == dest.length());
+
+      for ( int i = 0; i < src.length(); i++ )
+        dest[src.length() - i - 1] = src.at(i);
+    }
+
+    /**
      * @brief               convert DNA or AA alphabets to upper case
      * @param[in]   seq     pointer to input sequence
      * @param[in]   len     length of input sequence

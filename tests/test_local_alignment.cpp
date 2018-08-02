@@ -37,7 +37,7 @@ TEST(localAlignment, singleQuerySequential_vg)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromVG(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
@@ -73,7 +73,7 @@ TEST(localAlignment, singleQuerySequential_txt)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromTxt(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
@@ -109,7 +109,7 @@ TEST(localAlignment, multipleQueryParallelScore_vg)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromVG(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
@@ -157,7 +157,7 @@ TEST(localAlignment, multipleQueryParallelScore_txt)
   psgl::graphLoader<VertexIdType, EdgeIdType> g;
   g.loadFromTxt(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system

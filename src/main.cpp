@@ -58,7 +58,7 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  std::vector< psgl::BestScoreInfo<ScoreType, VertexIdType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
 
   psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 

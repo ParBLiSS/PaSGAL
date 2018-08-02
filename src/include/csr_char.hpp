@@ -40,9 +40,11 @@ namespace psgl
 
         //contiguous adjacency list of all vertices, size = numEdges
         std::vector<VertexIdType> adjcny_in;  
+        std::vector<VertexIdType> adjcny_out;  
 
         //offsets in adjacency list for each vertex, size = numVertices + 1
         std::vector<EdgeIdType> offsets_in;
+        std::vector<EdgeIdType> offsets_out;
 
         //Container to hold character label of all vertices in graph
         std::vector<char> vertex_label;
@@ -57,8 +59,12 @@ namespace psgl
           this->numVertices = csr.totalRefLength();
           
           vertex_label.reserve (csr.totalRefLength());
+
           adjcny_in.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
+          adjcny_out.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
+
           offsets_in.reserve (csr.totalRefLength() + 1);
+          offsets_out.reserve (csr.totalRefLength() + 1);
 
           //Save vertex labels
           {
@@ -70,26 +76,52 @@ namespace psgl
 
           //Init edges:
           {
-            offsets_in.push_back(0);
-
-            for (graphIterFwd <VertexIdType, EdgeIdType> g(csr); !g.end(); g.next())
+            // in edges
             {
-              //get preceeding dependency offsets from graph
+              offsets_in.push_back(0);
               std::vector<VertexIdType> inNeighbors;
-              g.getNeighborOffsets(inNeighbors);
 
-              for(auto &e : inNeighbors)
-                adjcny_in.push_back(e);
+              for (graphIterFwd <VertexIdType, EdgeIdType> g(csr); !g.end(); g.next())
+              {
+                //get preceeding dependency offsets from graph
+                inNeighbors.clear();
+                g.getInNeighborOffsets(inNeighbors);
 
-              offsets_in.push_back (adjcny_in.size());
+                for(auto &e : inNeighbors)
+                  adjcny_in.push_back(e);
+
+                offsets_in.push_back (adjcny_in.size());
+              }
+            }
+
+            // out edges
+            {
+              offsets_out.push_back(0);
+              std::vector<VertexIdType> outNeighbors;
+
+              for (graphIterFwd <VertexIdType, EdgeIdType> g(csr); !g.end(); g.next())
+              {
+                //get preceeding dependency offsets from graph
+                outNeighbors.clear();
+                g.getOutNeighborOffsets(outNeighbors);
+
+                for(auto &e : outNeighbors)
+                  adjcny_out.push_back(e);
+
+                offsets_out.push_back (adjcny_out.size());
+              }
             }
           }
 
           this->numEdges = adjcny_in.size();
 
           assert(vertex_label.size() == this->numVertices);
+
           assert(adjcny_in.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);
+          assert(adjcny_out.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);
+
           assert(offsets_in.size() ==  csr.totalRefLength() + 1);
+          assert(offsets_out.size() ==  csr.totalRefLength() + 1);
 
 #ifndef NDEBUG
           this->verify();
@@ -244,8 +276,12 @@ namespace psgl
           //adjacency list
           {
             assert(adjcny_in.size() == this->numEdges);
+            assert(adjcny_out.size() == this->numEdges);
 
             for(auto vId : adjcny_in)
+              assert(vId >=0 && vId < this->numVertices);
+
+            for(auto vId : adjcny_out)
               assert(vId >=0 && vId < this->numVertices);
           }
 
@@ -255,7 +291,11 @@ namespace psgl
             assert(std::is_sorted(offsets_in.begin(), offsets_in.end()));
             assert(offsets_in.front() == 0 && offsets_in.back() == this->numEdges);
 
-            for(auto off : offsets_in)
+            assert(offsets_out.size() == this->numVertices + 1);
+            assert(std::is_sorted(offsets_out.begin(), offsets_out.end()));
+            assert(offsets_out.front() == 0 && offsets_out.back() == this->numEdges);
+
+            for(auto off : offsets_out)
               assert(off >=0 && off <= this->numEdges); 
           }
 
@@ -264,6 +304,10 @@ namespace psgl
             for(VertexIdType i = 0; i < this->numVertices; i++)
               for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
                 assert( adjcny_in[j] < i);
+
+            for(VertexIdType i = 0; i < this->numVertices; i++)
+              for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
+                assert( adjcny_out[j] > i);
           }
         }
     };

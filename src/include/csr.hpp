@@ -462,6 +462,22 @@ namespace psgl
         }
 
         /**
+         * @brief                   get prefix sequence sum offsets for all out-neighbor vertices
+         * @param[in]   v
+         * @param[out]  vec
+         * @details                 useful during reverse DP execution- to access right neighboring reference 
+         *                          cells
+         */
+        void getOutSeqOffsets(VertexIdType v, std::vector<VertexIdType> &vec) const
+        {
+          assert(vec.size() == 0);
+          assert(v >= 0 && v < this->numVertices);
+
+          for(auto i = offsets_out[v]; i < offsets_out[v+1]; i++)
+            vec.push_back( cumulativeSeqLength[adjcny_out[i]] - vertex_metadata[adjcny_out[i]].length() );
+        }
+
+        /**
          * @brief             compute farthest reachable vertex on left side
          *                    while accounting for length of vertex sequences
          * @param[in]   v     id of starting vertex (where alignment ends)
