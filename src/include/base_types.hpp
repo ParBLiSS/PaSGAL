@@ -11,10 +11,10 @@
 
 #define psgl_max(a,b) (((a)>(b))?(a):(b))
 #define ASSUMED_CPU_FREQ 2300000000
+#define PSGL_STATUS_OK 0
 
 namespace psgl
 {
-
   /**
    * @brief     scores
    * @details   assume edits wrt. reference sequence
@@ -46,7 +46,7 @@ namespace psgl
   template <typename ScoreType>
     struct BestScoreInfo
     {
-      //positioning in complete DP matrix where optimal alignment begins and ends (both inclusive)
+      //coordinates in complete DP matrix where optimal alignment begins and ends (both inclusive)
       //these are 0-based offsets
       int32_t refColumnStart;
       int32_t refColumnEnd;

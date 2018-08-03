@@ -100,8 +100,10 @@ namespace psgl
 
               matrix[i & 1][j] = currentMax;
 
+              bestScore = psgl_max (bestScore, currentMax);
+
               //Update best score observed till now
-              if (bestScore < currentMax)
+              if (bestScore == currentMax)
               {
                 bestScore = currentMax; bestCol = j; bestRow = i;
               }
@@ -201,15 +203,27 @@ namespace psgl
 
               matrix[i & 1][j] = currentMax;
 
+              bestScore = psgl_max (bestScore, currentMax);
+
               //Update best score observed till now
-              if (bestScore < currentMax)
+              if (bestScore == currentMax)
               {
                 bestScore = currentMax; bestCol = j; bestRow = readLength - 1 - i;
+              }
+
+              //special handling of the cell where optimal alignment had ended during forward DP
+              if (j == bestScoreVector[readno].refColumnEnd && (readLength - 1 - i) == bestScoreVector[readno].qryRowEnd)
+              {
+                //local alignment needs to end with a match
+                assert (currentMax == SCORE::match);
+
+                //add one so that the other end of the optimal alignment can be located without ambuiguity
+                matrix[i & 1][j] = SCORE::match + 1;
               }
             } // end of row computation
           } // end of DP
 
-          assert (bestScoreVector[readno].score == bestScore);
+          assert (bestScoreVector[readno].score == bestScore - 1);    //offset by 1
           bestScoreVector[readno].refColumnStart = bestCol;
           bestScoreVector[readno].qryRowStart = bestRow;
 
@@ -243,46 +257,30 @@ namespace psgl
     {
       assert (bestScoreVector.size() == readSet.size());
 
+#pragma omp parallel for
       for (size_t readno = 0; readno < readSet.size(); readno++)
       {
         //for time profiling within phase 2
-        uint64_t time_p2_1, time_p2_2, time_p2_3;
+        uint64_t time_p2_1, time_p2_2;
 
         //read length
         auto readLength = readSet[readno].length();
 
         //
-        // PHASE 2.1 : COMPUTE FARTHEST REACHABLE VERTEX 
-        //
-
-        VertexIdType leftMostReachable;
-
-        {
-          auto tick1 = __rdtsc();
-
-          std::size_t maxDistance = readLength + std::ceil( readLength * 1.0 * SCORE::match/SCORE::del );
-          leftMostReachable = graph.computeLeftMostReachableVertex(bestScoreVector[readno].refColumnEnd, maxDistance);  
-
-#ifdef DEBUG
-          std::cout << "INFO, psgl::alignToDAGLocal, left most reachable vertex id = " << leftMostReachable << std::endl;
-#endif
-
-          auto tick2 = __rdtsc();
-          time_p2_1 = tick2 - tick1;
-        }
-
-        //
-        // PHASE 2.2 : RECOMPUTE DP MATRIX WITH TRACEBACK INFORMATION
+        // PHASE 2.1 : RECOMPUTE DP MATRIX WITH TRACEBACK INFORMATION
         //
 
         //width of score matrix that we need in memory
-        std::size_t reducedWidth = bestScoreVector[readno].refColumnEnd - leftMostReachable + 1;
+        std::size_t reducedWidth = bestScoreVector[readno].refColumnEnd - bestScoreVector[readno].refColumnStart + 1;
 
         //for new beginning column
-        std::size_t j0 = leftMostReachable; 
+        std::size_t j0 = bestScoreVector[readno].refColumnStart; 
 
         //height of scoring matrix for re-computation
-        std::size_t reducedHeight = bestScoreVector[readno].qryRowEnd + 1;   //i.e. row id ass. with best score -- plus one 
+        std::size_t reducedHeight = bestScoreVector[readno].qryRowEnd - bestScoreVector[readno].qryRowStart + 1; 
+
+        //for new beginning row
+        std::size_t i0 = bestScoreVector[readno].qryRowStart; 
 
         //scores in the last row
         std::vector<ScoreType> finalRow(reducedWidth, 0);
@@ -312,7 +310,7 @@ namespace psgl
               //'& 1' is same as doing modulo 2
 
               //match-mismatch edit
-              ScoreType matchScore = curChar == readSet[readno][i] ? SCORE::match : SCORE::mismatch;
+              ScoreType matchScore = curChar == readSet[readno][i + i0] ? SCORE::match : SCORE::mismatch;
               ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
 
               //deletion edit
@@ -347,11 +345,11 @@ namespace psgl
           assert( bestScoreReComputed == finalRow[ bestScoreVector[readno].refColumnEnd - j0 ] );
 
           auto tick2 = __rdtsc();
-          time_p2_2 = tick2 - tick1;
+          time_p2_1 = tick2 - tick1;
         }
 
         //
-        // PHASE 2.3 : COMPUTE CIGAR
+        // PHASE 2.2 : COMPUTE CIGAR
         //
         
         std::string cigar;
@@ -363,7 +361,7 @@ namespace psgl
           std::vector<ScoreType> aboveRowScores (reducedWidth);
 
           int col = reducedWidth - 1;
-          int row = bestScoreVector[readno].qryRowEnd;
+          int row = reducedHeight - 1;
 
           while (col >= 0 && row >= 0)
           {
@@ -381,7 +379,7 @@ namespace psgl
             ScoreType fromInsertion = aboveRowScores[col] + SCORE::ins;
 
             //match-mismatch edit
-            ScoreType matchScore = curChar == readSet[readno][row] ? SCORE::match : SCORE::mismatch;
+            ScoreType matchScore = curChar == readSet[readno][row + i0] ? SCORE::match : SCORE::mismatch;
 
             ScoreType fromMatch = matchScore;   //also handles the case when in-degree is zero 
             std::size_t fromMatchPos = col;
@@ -460,12 +458,12 @@ namespace psgl
           bestScoreVector[readno].cigar = cigar;
 
           auto tick2 = __rdtsc();
-          time_p2_3 = tick2 - tick1;
+          time_p2_2 = tick2 - tick1;
         }
 
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", len = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, cigar: " << bestScoreVector[readno].cigar << "\n";
-        //std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, CPU cycles spent in :  phase 2.1 = " << time_p2_1 << ", phase 2.2 = " << time_p2_2 << ", phase 2.3 = " << time_p2_3 << "\n";
+        std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, CPU cycles spent in :  phase 2.1 = " << time_p2_1 * 1.0 / ASSUMED_CPU_FREQ << ", phase 2.2 = " << time_p2_2 * 1.0 / ASSUMED_CPU_FREQ << "\n";
         //std::cout.flush();
       }
     }
@@ -573,11 +571,11 @@ namespace psgl
       {
         for (size_t readno = 0; readno < readSet.size(); readno++)
         {
-          std::cout << "INFO, psgl::alignToDAGLocal, read # " << readno << ", score = " << outputBestScoreVector[readno].score 
-                                                                        << ", refColumnStart = " << outputBestScoreVector[readno].refColumnStart 
-                                                                        << ", refColumnEnd = " << outputBestScoreVector[readno].refColumnEnd
-                                                                        << ", qryRowStart = " << outputBestScoreVector[readno].qryRowStart
-                                                                        << ", qryRowEnd = " << outputBestScoreVector[readno].qryRowEnd << "\n";
+          std::cout << "INFO, psgl::alignToDAGLocal, read # " << readno + 1 << ", score = " << outputBestScoreVector[readno].score 
+                                                                            << ", refColumnStart = " << outputBestScoreVector[readno].refColumnStart 
+                                                                            << ", refColumnEnd = " << outputBestScoreVector[readno].refColumnEnd
+                                                                            << ", qryRowStart = " << outputBestScoreVector[readno].qryRowStart
+                                                                            << ", qryRowEnd = " << outputBestScoreVector[readno].qryRowEnd << "\n";
         }
       }
 
@@ -644,7 +642,7 @@ namespace psgl
    * @param[in]   mode
    */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAG(const std::string &qfile, 
+    int alignToDAG(const std::string &qfile, 
         const CSR_char_container<VertexIdType, EdgeIdType> &graph,
         std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector,
         const MODE mode)  
@@ -684,6 +682,8 @@ namespace psgl
       std::cout << "INFO, psgl::alignToDAG, total count of reads = " << reads.size() << std::endl;
 
       alignToDAG<ScoreType> (reads, graph, outputBestScoreVector, mode);
+
+      return PSGL_STATUS_OK;
     }
 }
 

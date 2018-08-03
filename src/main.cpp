@@ -60,7 +60,8 @@ int main(int argc, char **argv)
 
   std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
 
-  psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  if (psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL) == PSGL_STATUS_OK)
+    std::cout << "INFO, psgl::main, run finished" << std::endl;
 
 #ifdef DEBUG
   g.diCharGraph.printDegreeHistogram();

@@ -330,7 +330,7 @@ namespace psgl
         void sort()
         {
           std::vector<VertexIdType> order(this->numVertices);
-          const int runs = 5;
+          const int runs = 1;
 
           topologicalSort(runs, order); 
 

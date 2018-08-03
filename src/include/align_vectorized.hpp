@@ -35,6 +35,9 @@
 
 namespace psgl
 {
+  /**
+   * @brief   Supports phase 1 DP in forward direction
+   */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
     class Phase1_Vectorized
     {
@@ -46,14 +49,6 @@ namespace psgl
         //reference graph
         const CSR_char_container<VertexIdType, EdgeIdType> &graph;
 
-        //small temporary storage buffer for DP scores
-        //should be a power of 2
-        static constexpr size_t smallBufferWidth = 8; 
-
-        //process these many vertical cells in a go
-        //should be a power of 2
-        static constexpr size_t matrixHeight = 4;   
-
         //for converting input reads into SOA to enable vectorization
         std::vector<char>  readSet_SOA;
 
@@ -62,6 +57,14 @@ namespace psgl
         std::vector<bool> withLongHop;
 
       public:
+
+        //small temporary storage buffer for DP scores
+        //should be a power of 2
+        static constexpr size_t smallBufferWidth = 8; 
+
+        //process these many vertical cells in a go
+        //should be a power of 2
+        static constexpr size_t matrixHeight = 4;   
 
         /**
          * @brief                   public constructor
@@ -117,9 +120,9 @@ namespace psgl
                 outputBestScoreVector [i*SIMD_WIDTH + j].refColumnEnd = storeCols[j];
                 outputBestScoreVector [i*SIMD_WIDTH + j].qryRowEnd = storeRows[j];
 
-//#ifdef DEBUG
+#ifdef DEBUG
                 std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << i * SIMD_WIDTH + j << ",  score = " << storeScores[j] << "\n";
-//#endif
+#endif
               }
             }
           }
@@ -279,6 +282,9 @@ namespace psgl
                     //current reference character
                     __m512i graphChar = _SET1 ((int32_t) graph.vertex_label[j] );
 
+                    //current best score, init to 0
+                    __m512i currentMax512;
+
                     //iterate over read characters
                     for (size_t k = 0; k < this->matrixHeight; k++)
                     {
@@ -286,14 +292,14 @@ namespace psgl
                       __m512i readChars = _LOAD ( &readCharsInt[k * SIMD_WIDTH] );
 
                       //current best score, init to 0
-                      __m512i currentMax = _ZERO;
+                      currentMax512 = _ZERO;
 
                       //see if query and reference character match
                       __mmask16 compareChar = _EQUAL (readChars, graphChar);
                       __m512i sub512 = _BLEND (compareChar, mismatch512, match512);
 
                       //match-mismatch edit
-                      currentMax = _MAX (currentMax, sub512); //local alignment can also start with a match at this char 
+                      currentMax512 = _MAX (currentMax512, sub512); //local alignment can also start with a match at this char 
 
                       //iterate over graph neighbors
                       if (k == 0)
@@ -302,7 +308,7 @@ namespace psgl
                         {
                           //paths with match mismatch edit
                           __m512i substEdit = _ADD ( lastBatchRow[(loopI - 1) & 1][ graph.adjcny_in[l] ], sub512);
-                          currentMax = _MAX (currentMax, substEdit); 
+                          currentMax512 = _MAX (currentMax512, substEdit); 
 
                           //paths with deletion edit
                           __m512i delEdit;
@@ -312,12 +318,12 @@ namespace psgl
                           else
                             delEdit = _ADD ( fartherColumns[graph.adjcny_in[l]][k], del512);
 
-                          currentMax = _MAX (currentMax, delEdit); 
+                          currentMax512 = _MAX (currentMax512, delEdit); 
                         }
 
                         //insertion edit
                         __m512i insEdit = _ADD (lastBatchRow[(loopI - 1) & 1][j], ins512);
-                        currentMax = _MAX (currentMax, insEdit);
+                        currentMax512 = _MAX (currentMax512, insEdit);
                       }
                       else
                       {
@@ -340,35 +346,36 @@ namespace psgl
                             delEdit = _ADD ( fartherColumns[graph.adjcny_in[l]][k], del512);
                           }
 
-                          currentMax = _MAX (currentMax, substEdit); 
-                          currentMax = _MAX (currentMax, delEdit); 
+                          currentMax512 = _MAX (currentMax512, substEdit); 
+                          currentMax512 = _MAX (currentMax512, delEdit); 
                         }
 
                         //insertion edit
                         __m512i insEdit = _ADD (nearbyColumns[j & (smallBufferWidth-1)][k-1], ins512);
-                        currentMax = _MAX (currentMax, insEdit);
+                        currentMax512 = _MAX (currentMax512, insEdit);
                       }
 
                       //update best score observed yet
-                      bestScores512 = _MAX (currentMax, bestScores512);
+                      bestScores512 = _MAX (currentMax512, bestScores512);
 
                       //on which lanes is the best score updated
-                      __mmask16 updated = _EQUAL (currentMax, bestScores512);
+                      __mmask16 updated = _EQUAL (currentMax512, bestScores512);
 
                       //update row and column values accordingly
                       bestRows512 = _SET1_MASK (bestRows512, updated, (int32_t) (i + k));
                       bestCols512 = _SET1_MASK (bestCols512, updated, (int32_t) j);
 
                       //save current score in small buffer
-                      nearbyColumns[j & (smallBufferWidth-1)][k] = currentMax;
+                      nearbyColumns[j & (smallBufferWidth-1)][k] = currentMax512;
 
                       //save current score in large buffer if connected thru long hop
                       if ( this->withLongHop[j] )
-                        fartherColumns[j][k] = currentMax;
-
-                      //save last score for next row-wise iteration
-                      lastBatchRow[loopI & 1][j] = currentMax; 
+                        fartherColumns[j][k] = currentMax512;
                     }
+
+                    //save last score for next row-wise iteration
+                    lastBatchRow[loopI & 1][j] = currentMax512; 
+
                   } // end of row computation
                 } // end of DP
 
@@ -391,6 +398,9 @@ namespace psgl
 
     };
 
+  /**
+   * @brief   Supports phase 1 DP in reverse direction
+   */
   template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
     class Phase1_Rev_Vectorized
     {
@@ -404,11 +414,11 @@ namespace psgl
 
         //small temporary storage buffer for DP scores
         //should be a power of 2
-        static constexpr size_t smallBufferWidth = 8; 
+        static constexpr size_t smallBufferWidth = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::smallBufferWidth; 
 
         //process these many vertical cells in a go
         //should be a power of 2
-        static constexpr size_t matrixHeight = 4;   
+        static constexpr size_t matrixHeight = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::matrixHeight;   
 
         //for converting input reads into SOA to enable vectorization
         std::vector<char>  readSet_SOA;
@@ -454,7 +464,7 @@ namespace psgl
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreColVector (readSet.size() / SIMD_WIDTH);
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreRowVector (readSet.size() / SIMD_WIDTH);
 
-            this->alignToDAGLocal_Phase1_rev_vectorized (_bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
+            this->alignToDAGLocal_Phase1_rev_vectorized (outputBestScoreVector, _bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
 
             //parse best scores from vector registers
             std::vector<int32_t, aligned_allocator<int32_t, 64> > storeScores (SIMD_WIDTH);
@@ -469,13 +479,13 @@ namespace psgl
 
               for (size_t j = 0; j < SIMD_WIDTH; j++)
               {
-                assert (outputBestScoreVector [i*SIMD_WIDTH + j].score == storeScores[j]);
+                assert (outputBestScoreVector [i*SIMD_WIDTH + j].score == storeScores[j] - 1);  //offset by 1
                 outputBestScoreVector [i*SIMD_WIDTH + j].refColumnStart = storeCols[j];
-                outputBestScoreVector [i*SIMD_WIDTH + j].qryRowStart = storeRows[j];
+                outputBestScoreVector [i*SIMD_WIDTH + j].qryRowStart = readSet[i*SIMD_WIDTH + j].length() - 1 - storeRows[j];   //convert rev. direction to fwd.
 
-//#ifdef DEBUG
+#ifdef DEBUG
                 std::cout << "INFO, psgl::Phase1_Rev_Vectorized::alignToDAGLocal_Phase1_rev_vectorized_wrapper, read # " << i * SIMD_WIDTH + j << ",  score = " << storeScores[j] << "\n";
-//#endif
+#endif
               }
             }
           }
@@ -542,14 +552,17 @@ namespace psgl
         }
 
         /**
-         * @brief                         execute first phase of alignment i.e. compute DP and 
-         *                                find locations of the best alignment of each read
-         * @param[out]  bestScores        best DP scores of reads
-         * @param[out]  bestCols          columns where best alignment ends (for traceback later)
-         * @param[out]  bestRows          rows where best alignment ends
+         * @brief                               execute reverse variant of first phase of alignment i.e. 
+         *                                      compute reverse DP and find begin locations of the best 
+         *                                      alignment of each read
+         * @param[in]   outputBestScoreVector   best scores and end locations computed during forward DP
+         * @param[out]  bestScores              best DP scores of reads
+         * @param[out]  bestCols                columns where best alignment starts
+         * @param[out]  bestRows                rows where best alignment starts
          */
-        template <typename Vec>
-          void alignToDAGLocal_Phase1_rev_vectorized (Vec &bestScores, Vec &bestCols, Vec &bestRows) const
+        template <typename Vec1, typename Vec2>
+          void alignToDAGLocal_Phase1_rev_vectorized (const Vec1 &outputBestScoreVector,
+                                                      Vec2 &bestScores, Vec2 &bestCols, Vec2 &bestRows) const
           {
             size_t readCount = readSet.size();
             size_t readLength = readSet[0].length();
@@ -610,6 +623,24 @@ namespace psgl
               {
                 size_t readBatch = readno/SIMD_WIDTH;
 
+                __m512i fwdBestCols512;
+                __m512i fwdBestRows512;
+
+                //parse alignment locations of forward DP
+                {
+                  std::vector<int32_t, aligned_allocator<int32_t, 64> > fwdBestCols   (SIMD_WIDTH);
+                  std::vector<int32_t, aligned_allocator<int32_t, 64> > fwdBestRows   (SIMD_WIDTH);
+
+                  for (size_t j = 0; j < SIMD_WIDTH; j++)
+                  {
+                    fwdBestCols[j] = outputBestScoreVector[readno + j].refColumnEnd;
+                    fwdBestRows[j] = readLength - 1 - outputBestScoreVector[readno + j].qryRowEnd;
+                  }
+
+                  fwdBestCols512 = _LOAD ( fwdBestCols.data() );
+                  fwdBestRows512 = _LOAD ( fwdBestRows.data() );
+                }
+
                 __m512i bestScores512 = _ZERO;
                 __m512i bestRows512   = _ZERO;
                 __m512i bestCols512   = _ZERO;
@@ -635,6 +666,9 @@ namespace psgl
                     //current reference character
                     __m512i graphChar = _SET1 ((int32_t) graph.vertex_label[j] );
 
+                    //current best score
+                    __m512i currentMax512;
+
                     //iterate over read characters
                     for (size_t k = 0; k < this->matrixHeight; k++)
                     {
@@ -642,14 +676,14 @@ namespace psgl
                       __m512i readChars = _LOAD ( &readCharsInt[k * SIMD_WIDTH] );
 
                       //current best score, init to 0
-                      __m512i currentMax = _ZERO;
+                      currentMax512 = _ZERO;
 
                       //see if query and reference character match
                       __mmask16 compareChar = _EQUAL (readChars, graphChar);
                       __m512i sub512 = _BLEND (compareChar, mismatch512, match512);
 
                       //match-mismatch edit
-                      currentMax = _MAX (currentMax, sub512); //local alignment can also start with a match at this char 
+                      currentMax512 = _MAX (currentMax512, sub512); //local alignment can also start with a match at this char 
 
                       //iterate over graph neighbors
                       if (k == 0)
@@ -658,7 +692,7 @@ namespace psgl
                         {
                           //paths with match mismatch edit
                           __m512i substEdit = _ADD ( lastBatchRow[(loopI - 1) & 1][ graph.adjcny_out[l] ], sub512);
-                          currentMax = _MAX (currentMax, substEdit); 
+                          currentMax512 = _MAX (currentMax512, substEdit); 
 
                           //paths with deletion edit
                           __m512i delEdit;
@@ -668,12 +702,12 @@ namespace psgl
                           else
                             delEdit = _ADD ( fartherColumns[graph.adjcny_out[l]][k], del512);
 
-                          currentMax = _MAX (currentMax, delEdit); 
+                          currentMax512 = _MAX (currentMax512, delEdit); 
                         }
 
                         //insertion edit
                         __m512i insEdit = _ADD (lastBatchRow[(loopI - 1) & 1][j], ins512);
-                        currentMax = _MAX (currentMax, insEdit);
+                        currentMax512 = _MAX (currentMax512, insEdit);
                       }
                       else
                       {
@@ -696,35 +730,46 @@ namespace psgl
                             delEdit = _ADD ( fartherColumns[graph.adjcny_out[l]][k], del512);
                           }
 
-                          currentMax = _MAX (currentMax, substEdit); 
-                          currentMax = _MAX (currentMax, delEdit); 
+                          currentMax512 = _MAX (currentMax512, substEdit); 
+                          currentMax512 = _MAX (currentMax512, delEdit); 
                         }
 
                         //insertion edit
                         __m512i insEdit = _ADD (nearbyColumns[j & (smallBufferWidth-1)][k-1], ins512);
-                        currentMax = _MAX (currentMax, insEdit);
+                        currentMax512 = _MAX (currentMax512, insEdit);
                       }
 
                       //update best score observed yet
-                      bestScores512 = _MAX (currentMax, bestScores512);
+                      bestScores512 = _MAX (currentMax512, bestScores512);
 
                       //on which lanes is the best score updated
-                      __mmask16 updated = _EQUAL (currentMax, bestScores512);
+                      __mmask16 updated = _EQUAL (currentMax512, bestScores512);
 
                       //update row and column values accordingly
-                      bestRows512 = _SET1_MASK (bestRows512, updated, (int32_t) ((readLength - 1)  - (i + k)));
                       bestCols512 = _SET1_MASK (bestCols512, updated, (int32_t) j);
+                      bestRows512 = _SET1_MASK (bestRows512, updated, (int32_t) (i + k));
+
+                      //detect and update score of the optimal alignment we want
+                      {
+                        __m512i currentCol = _SET1 ( (int32_t) j ); 
+                        __m512i currentRow = _SET1 ( (int32_t) (i + k) );
+                        
+                        __mmask16 compareCell = _EQUAL (fwdBestCols512, currentCol) & _EQUAL (fwdBestRows512, currentRow);
+
+                        currentMax512 = _SET1_MASK (currentMax512, compareCell, (int32_t) (SCORE::match + 1)); 
+                      }
 
                       //save current score in small buffer
-                      nearbyColumns[j & (smallBufferWidth-1)][k] = currentMax;
+                      nearbyColumns[j & (smallBufferWidth-1)][k] = currentMax512;
 
                       //save current score in large buffer if connected thru long hop
                       if ( this->withLongHop[j] )
-                        fartherColumns[j][k] = currentMax;
-
-                      //save last score for next row-wise iteration
-                      lastBatchRow[loopI & 1][j] = currentMax; 
+                        fartherColumns[j][k] = currentMax512;
                     }
+
+                    //save last score for next row-wise iteration
+                    lastBatchRow[loopI & 1][j] = currentMax512; 
+
                   } // end of row computation
                 } // end of DP
 
