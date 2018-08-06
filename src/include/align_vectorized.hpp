@@ -64,7 +64,7 @@ namespace psgl
 
         //process these many vertical cells in a go
         //should be a power of 2
-        static constexpr size_t matrixHeight = 4;   
+        static constexpr size_t matrixHeight = 8;   
 
         /**
          * @brief                   public constructor
@@ -574,9 +574,9 @@ namespace psgl
             assert (readSet_SOA.size() == readCount * readLength);
             assert (readCount % SIMD_WIDTH == 0);
 
-#ifdef VTUNE_SUPPORT
-            __itt_resume();
-#endif
+//#ifdef VTUNE_SUPPORT
+            //__itt_resume();
+//#endif
 
             //for time profiling within phase 1
             auto tick1 = __rdtsc();
@@ -785,9 +785,9 @@ namespace psgl
             std::cout << "TIMER, psgl::Phase1_Rev_Vectorized::alignToDAGLocal_Phase1_rev_vectorized , CPU cycles spent in phase 1-R (without wrapper) = " << tick2 - tick1
               << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
 
-#ifdef VTUNE_SUPPORT
-            __itt_pause();
-#endif
+//#ifdef VTUNE_SUPPORT
+            //__itt_pause();
+//#endif
           }
 
     };
