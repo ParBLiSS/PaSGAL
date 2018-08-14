@@ -4,7 +4,6 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-
 #ifndef GRAPH_ALIGN_HPP
 #define GRAPH_ALIGN_HPP
 
@@ -268,6 +267,7 @@ namespace psgl
 
         //
         // PHASE 2.1 : RECOMPUTE DP MATRIX WITH TRACEBACK INFORMATION
+        // recomputation is done within selected block of DP matrix
         //
 
         //width of score matrix that we need in memory
@@ -653,6 +653,7 @@ namespace psgl
       assert (outputBestScoreVector.empty());
 
       {
+        //TODO: Read query sequences in batches rather than all at once
         if( !fileExists(qfile) )
         {
           std::cerr << qfile << " not accessible." << std::endl;
