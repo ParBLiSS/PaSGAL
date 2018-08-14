@@ -48,7 +48,7 @@ namespace psgl
         const CSR_char_container<VertexIdType, EdgeIdType> &graph;
 
         // pre-compute which graph vertices are connected with hop longer
-        // than 'smallBufferWidth'
+        // than 'blockWidth'
         std::vector<bool> withLongHop;
 
         //for converting input reads into SOA to enable vectorization
@@ -70,11 +70,11 @@ namespace psgl
 
         //small temporary storage buffer for DP scores
         //should be a power of 2
-        static constexpr size_t smallBufferWidth = 8; 
+        static constexpr size_t blockWidth = 8; 
 
         //process these many vertical cells in a go
         //should be a power of 2
-        static constexpr size_t matrixHeight = 8;   
+        static constexpr size_t blockHeight = 8;   
 
         /**
          * @brief                   public constructor
@@ -98,8 +98,7 @@ namespace psgl
          * @brief                                 wrapper function for phase 1 routine 
          * @param[out]  outputBestScoreVector     vector to keep value and location of best scores,
          *                                        vector size is same as count of the reads
-         * @note                                  reverse complement of reads are not handled
-         *                                        inside this class
+         * @note                                  this class won't care about rev. complement of sequences
          */
         template <typename Vec>
           void alignToDAGLocal_Phase1_vectorized_wrapper(Vec &outputBestScoreVector) const
@@ -113,6 +112,7 @@ namespace psgl
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreColVector (countReadBatches);
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreRowVector (countReadBatches);
 
+            // execute the alignment routine
             this->alignToDAGLocal_Phase1_vectorized (_bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
 
             //parse best scores from vector registers
@@ -148,7 +148,7 @@ namespace psgl
 
         /**
          * @brief       compute the sorted order of sequences for load balancing
-         * @details     sorting is done in decreasing order
+         * @details     sorting is done in decreasing length order
          */
         void sortReadsForLoadBalance()
         {
@@ -181,7 +181,7 @@ namespace psgl
 
           /**
            * Requirements from the padding process
-           * - each read length be a multiple of 'matrixHeight'
+           * - each read length be a multiple of 'blockHeight'
            * - count of reads be a multiple of SIMD_WIDTH
            * - each batch of SIMD_WIDTH reads should be of equal length
            */
@@ -196,7 +196,7 @@ namespace psgl
           for (size_t i = 0; i < readCount; i += SIMD_WIDTH)
           {
             auto batchLength = readSet[sortedReadOrder[i]].length();  //longest read in this batch
-            batchLength += matrixHeight - 1 - (batchLength - 1) % matrixHeight; //round-up
+            batchLength += blockHeight - 1 - (batchLength - 1) % blockHeight; //round-up
 
             for (size_t j = 0; j < batchLength; j++)
               for (size_t k = 0; k < SIMD_WIDTH; k++)
@@ -214,7 +214,7 @@ namespace psgl
 
         /**
          * @brief     precompute which vertices are connected with long edge hops
-         *            i.e. longer than 'smallBufferWidth'
+         *            i.e. longer than 'blockWidth'
          */
         void computeLongHops()
         {
@@ -229,8 +229,8 @@ namespace psgl
               auto from_pos = graph.adjcny_in[j];
               auto to_pos = i;
 
-              //compare hop distance to 'smallBufferWidth'
-              if (to_pos - from_pos >= this->smallBufferWidth)
+              //compare hop distance to 'blockWidth'
+              if (to_pos - from_pos >= this->blockWidth)
                 this->withLongHop[from_pos] = true;
             }
           }
@@ -279,7 +279,7 @@ namespace psgl
 
 #pragma omp parallel
             {
-              //initialize 2D vector called matrix of size 2 x graph size
+              //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
               //buffer to save selected columns (associated with long hops) of DP matrix
@@ -289,18 +289,18 @@ namespace psgl
               for(VertexIdType i = 0; i < graph.numVertices; i++)
               {
                 if ( this->withLongHop[i] )
-                  fartherColumns[i].resize(this->matrixHeight);
+                  fartherColumns[i].resize(this->blockHeight);
               }
 
               //buffer to save neighboring column scores
-              std::vector< AlignedVecType > nearbyColumns (this->smallBufferWidth, AlignedVecType(this->matrixHeight));
+              std::vector< AlignedVecType > nearbyColumns (this->blockWidth, AlignedVecType(this->blockHeight));
 
               //buffer to save scores of last row in each iteration
               //one row for writing and one for reading
               std::vector< AlignedVecType > lastBatchRow (2, AlignedVecType (graph.numVertices));
 
-              //buffer to save read charactes
-              std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->matrixHeight);
+              //buffer to save read charactes for innermost loop
+              std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
 
               //process SIMD_WIDTH reads in a single iteration
 #pragma omp for
@@ -314,16 +314,16 @@ namespace psgl
                 std::fill (lastBatchRow[1].begin(), lastBatchRow[1].end(), _ZERO);
 
                 int32_t qryBatchLength = readSet[sortedReadOrder[i*SIMD_WIDTH]].length();  //longest read in this batch
-                qryBatchLength += this->matrixHeight - 1 - (qryBatchLength - 1) % this->matrixHeight; //round-up
+                qryBatchLength += this->blockHeight - 1 - (qryBatchLength - 1) % this->blockHeight; //round-up
 
                 //iterate over read length (process more than 1 characters in batch)
-                for (int32_t j = 0; j < qryBatchLength; j += this->matrixHeight)
+                for (int32_t j = 0; j < qryBatchLength; j += this->blockHeight)
                 {
                   //loop counter 
-                  size_t loopJ = j / (this->matrixHeight);
+                  size_t loopJ = j / (this->blockHeight);
 
                   //convert read character to int32_t
-                  for (int32_t k = 0; k < SIMD_WIDTH * this->matrixHeight ; k++)
+                  for (int32_t k = 0; k < SIMD_WIDTH * this->blockHeight ; k++)
                   {
                     readCharsInt [k] = readSetSOA [readSetSOAPrefixSum[i] + j*SIMD_WIDTH + k];
                   }
@@ -337,8 +337,8 @@ namespace psgl
                     //current best score, init to 0
                     __m512i currentMax512;
 
-                    //iterate over 'matrixHeight' read characters
-                    for (size_t l = 0; l < this->matrixHeight; l++)
+                    //iterate over 'blockHeight' read characters
+                    for (size_t l = 0; l < this->blockHeight; l++)
                     {
                       //load read characters
                       __m512i readChars = _LOAD ( &readCharsInt[l * SIMD_WIDTH] );
@@ -366,8 +366,8 @@ namespace psgl
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (k - graph.adjcny_in[m] < smallBufferWidth)
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (smallBufferWidth-1)][l], del512);
+                          if (k - graph.adjcny_in[m] < blockWidth)
+                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (blockWidth-1)][l], del512);
                           else
                             delEdit = _ADD ( fartherColumns[graph.adjcny_in[m]][l], del512);
 
@@ -388,10 +388,10 @@ namespace psgl
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (k - graph.adjcny_in[m] < smallBufferWidth)
+                          if (k - graph.adjcny_in[m] < blockWidth)
                           {
-                            substEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (smallBufferWidth-1)][l-1], sub512);
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (smallBufferWidth-1)][l], del512);
+                            substEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (blockWidth-1)][l-1], sub512);
+                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (blockWidth-1)][l], del512);
                           }
                           else
                           {
@@ -404,7 +404,7 @@ namespace psgl
                         }
 
                         //insertion edit
-                        __m512i insEdit = _ADD (nearbyColumns[k & (smallBufferWidth-1)][l-1], ins512);
+                        __m512i insEdit = _ADD (nearbyColumns[k & (blockWidth-1)][l-1], ins512);
                         currentMax512 = _MAX (currentMax512, insEdit);
                       }
 
@@ -419,7 +419,7 @@ namespace psgl
                       bestCols512 = _SET1_MASK (bestCols512, updated, (int32_t) k);
 
                       //save current score in small buffer
-                      nearbyColumns[k & (smallBufferWidth-1)][l] = currentMax512;
+                      nearbyColumns[k & (blockWidth-1)][l] = currentMax512;
 
                       //save current score in large buffer if connected thru long hop
                       if ( this->withLongHop[k] )
@@ -462,7 +462,7 @@ namespace psgl
         const CSR_char_container<VertexIdType, EdgeIdType> &graph;
 
         // pre-compute which graph vertices are connected with hop longer
-        // than 'smallBufferWidth'
+        // than 'blockWidth'
         std::vector<bool> withLongHop;
 
         //for converting input reads into SOA to enable vectorization
@@ -482,11 +482,11 @@ namespace psgl
 
         //small temporary storage buffer for DP scores
         //should be a power of 2
-        static constexpr size_t smallBufferWidth = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::smallBufferWidth; 
+        static constexpr size_t blockWidth = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::blockWidth; 
 
         //process these many vertical cells in a go
         //should be a power of 2
-        static constexpr size_t matrixHeight = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::matrixHeight;   
+        static constexpr size_t blockHeight = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::blockHeight;   
 
       public:
 
@@ -512,8 +512,7 @@ namespace psgl
          * @brief                                 wrapper function for phase 1 reverse DP routine 
          * @param[out]  outputBestScoreVector     vector to keep value and begin location of best scores,
          *                                        vector size is same as count of the reads
-         * @note                                  reverse complement of reads are not handled
-         *                                        inside this class
+         * @note                                  this class won't care about rev. complement of sequences
          */
         template <typename Vec>
           void alignToDAGLocal_Phase1_rev_vectorized_wrapper(Vec &outputBestScoreVector) const
@@ -563,7 +562,7 @@ namespace psgl
 
         /**
          * @brief       compute the sorted order of sequences for load balancing
-         * @details     sorting is done in decreasing order
+         * @details     sorting is done in decreasing length order
          */
         void sortReadsForLoadBalance()
         {
@@ -596,7 +595,7 @@ namespace psgl
 
           /**
            * Requirements from the padding process
-           * - each read length be a multiple of 'matrixHeight'
+           * - each read length be a multiple of 'blockHeight'
            * - count of reads be a multiple of SIMD_WIDTH
            * - each batch of SIMD_WIDTH reads should be of equal length
            */
@@ -611,7 +610,7 @@ namespace psgl
           for (size_t i = 0; i < readCount; i += SIMD_WIDTH)
           {
             auto batchLength = readSet[sortedReadOrder[i]].length();  //longest read in this batch
-            batchLength += matrixHeight - 1 - (batchLength - 1) % matrixHeight; //round-up
+            batchLength += blockHeight - 1 - (batchLength - 1) % blockHeight; //round-up
 
             for (size_t j = 0; j < batchLength; j++)
               for (size_t k = 0; k < SIMD_WIDTH; k++)
@@ -629,7 +628,7 @@ namespace psgl
 
         /**
          * @brief     precompute which vertices are connected with long edge hops
-         *            i.e. longer than 'smallBufferWidth'
+         *            i.e. longer than 'blockWidth'
          */
         void computeLongHops()
         {
@@ -644,8 +643,8 @@ namespace psgl
               auto from_pos = graph.adjcny_in[j];
               auto to_pos = i;
 
-              //compare hop distance to 'smallBufferWidth'
-              if (to_pos - from_pos >= this->smallBufferWidth)
+              //compare hop distance to 'blockWidth'
+              if (to_pos - from_pos >= this->blockWidth)
                 this->withLongHop[to_pos] = true;
             }
           }
@@ -697,7 +696,7 @@ namespace psgl
 
 #pragma omp parallel
             {
-              //initialize 2D vector called matrix of size 2 x graph size
+              //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
               //buffer to save selected columns (associated with long hops) of DP matrix
@@ -707,18 +706,18 @@ namespace psgl
               for(VertexIdType i = 0; i < graph.numVertices; i++)
               {
                 if ( this->withLongHop[i] )
-                  fartherColumns[i].resize(this->matrixHeight);
+                  fartherColumns[i].resize(this->blockHeight);
               }
 
               //buffer to save neighboring column scores
-              std::vector< AlignedVecType > nearbyColumns (this->smallBufferWidth, AlignedVecType(this->matrixHeight));
+              std::vector< AlignedVecType > nearbyColumns (this->blockWidth, AlignedVecType(this->blockHeight));
 
               //buffer to save scores of last row in each iteration
               //one row for writing and one for reading
               std::vector< AlignedVecType > lastBatchRow (2, AlignedVecType (graph.numVertices));
 
-              //buffer to save read charactes
-              std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->matrixHeight);
+              //buffer to save read charactes for innermost loop
+              std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
 
               //process SIMD_WIDTH reads in a single iteration
 #pragma omp for
@@ -754,16 +753,16 @@ namespace psgl
                 std::fill (lastBatchRow[1].begin(), lastBatchRow[1].end(), _ZERO);
 
                 int32_t qryBatchLength = readSet[sortedReadOrder[i*SIMD_WIDTH]].length();  //longest read in this batch
-                qryBatchLength += this->matrixHeight - 1 - (qryBatchLength - 1) % this->matrixHeight; //round-up
+                qryBatchLength += this->blockHeight - 1 - (qryBatchLength - 1) % this->blockHeight; //round-up
 
                 //iterate over read length (process more than 1 characters in batch)
-                for (int32_t j = 0; j < qryBatchLength; j += this->matrixHeight)
+                for (int32_t j = 0; j < qryBatchLength; j += this->blockHeight)
                 {
                   //loop counter 
-                  size_t loopJ = j / (this->matrixHeight);
+                  size_t loopJ = j / (this->blockHeight);
 
                   //convert read character to int32_t
-                  for (int32_t k = 0; k < SIMD_WIDTH * this->matrixHeight ; k++)
+                  for (int32_t k = 0; k < SIMD_WIDTH * this->blockHeight ; k++)
                   {
                     readCharsInt [k] = readSetSOA [readSetSOAPrefixSum[i] + j*SIMD_WIDTH + k];
                   }
@@ -777,8 +776,8 @@ namespace psgl
                     //current best score, init to 0
                     __m512i currentMax512;
 
-                    //iterate over 'matrixHeight' read characters
-                    for (size_t l = 0; l < this->matrixHeight; l++)
+                    //iterate over 'blockHeight' read characters
+                    for (size_t l = 0; l < this->blockHeight; l++)
                     {
                       //load read characters
                       __m512i readChars = _LOAD ( &readCharsInt[l * SIMD_WIDTH] );
@@ -806,8 +805,8 @@ namespace psgl
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (graph.adjcny_out[m] - k < smallBufferWidth)
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (smallBufferWidth-1)][l], del512);
+                          if (graph.adjcny_out[m] - k < blockWidth)
+                            delEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (blockWidth-1)][l], del512);
                           else
                             delEdit = _ADD ( fartherColumns[graph.adjcny_out[m]][l], del512);
 
@@ -828,10 +827,10 @@ namespace psgl
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (graph.adjcny_out[m] - k < smallBufferWidth)
+                          if (graph.adjcny_out[m] - k < blockWidth)
                           {
-                            substEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (smallBufferWidth-1)][l-1], sub512);
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (smallBufferWidth-1)][l], del512);
+                            substEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (blockWidth-1)][l-1], sub512);
+                            delEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (blockWidth-1)][l], del512);
                           }
                           else
                           {
@@ -844,7 +843,7 @@ namespace psgl
                         }
 
                         //insertion edit
-                        __m512i insEdit = _ADD (nearbyColumns[k & (smallBufferWidth-1)][l-1], ins512);
+                        __m512i insEdit = _ADD (nearbyColumns[k & (blockWidth-1)][l-1], ins512);
                         currentMax512 = _MAX (currentMax512, insEdit);
                       }
 
@@ -869,7 +868,7 @@ namespace psgl
                       }
 
                       //save current score in small buffer
-                      nearbyColumns[k & (smallBufferWidth-1)][l] = currentMax512;
+                      nearbyColumns[k & (blockWidth-1)][l] = currentMax512;
 
                       //save current score in large buffer if connected thru long hop
                       if ( this->withLongHop[k] )
