@@ -303,7 +303,7 @@ namespace psgl
               std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
 
               //process SIMD_WIDTH reads in a single iteration
-#pragma omp for
+#pragma omp for schedule(dynamic)
               for (size_t i = 0; i < countReadBatches; i++)
               {
                 __m512i bestScores512 = _ZERO;
@@ -720,7 +720,7 @@ namespace psgl
               std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
 
               //process SIMD_WIDTH reads in a single iteration
-#pragma omp for
+#pragma omp for schedule(dynamic)
               for (size_t i = 0; i < countReadBatches; i++)
               {
                 __m512i fwdBestCols512;

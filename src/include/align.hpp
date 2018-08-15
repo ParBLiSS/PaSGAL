@@ -56,7 +56,7 @@ namespace psgl
         //we will keep re-using rows to keep memory-usage low
         std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(graph.numVertices, 0));
 
-#pragma omp for
+#pragma omp for schedule(dynamic)
         for (size_t readno = 0; readno < readSet.size(); readno++)
         {
           //reset buffer
@@ -159,7 +159,7 @@ namespace psgl
         //we will keep re-using rows to keep memory-usage low
         std::vector< std::vector<ScoreType> > matrix(2, std::vector<ScoreType>(graph.numVertices, 0));
 
-#pragma omp for
+#pragma omp for schedule(dynamic)
         for (size_t readno = 0; readno < readSet.size(); readno++)
         {
           //reset buffer
@@ -256,7 +256,7 @@ namespace psgl
     {
       assert (bestScoreVector.size() == readSet.size());
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic)
       for (size_t readno = 0; readno < readSet.size(); readno++)
       {
         //for time profiling within phase 2
@@ -461,10 +461,12 @@ namespace psgl
           time_p2_2 = tick2 - tick1;
         }
 
+#ifdef DEBUG
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", len = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
         std::cout << "INFO, psgl::alignToDAGLocal_Phase2, cigar: " << bestScoreVector[readno].cigar << "\n";
         std::cout << "TIMER, psgl::alignToDAGLocal_Phase2, CPU cycles spent in :  phase 2.1 = " << time_p2_1 * 1.0 / ASSUMED_CPU_FREQ << ", phase 2.2 = " << time_p2_2 * 1.0 / ASSUMED_CPU_FREQ << "\n";
         //std::cout.flush();
+#endif
       }
     }
 
@@ -568,6 +570,7 @@ namespace psgl
                   << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << std::endl;
       }
 
+#ifdef DEBUG
       {
         for (size_t readno = 0; readno < readSet.size(); readno++)
         {
@@ -578,6 +581,7 @@ namespace psgl
                                                                             << ", qryRowEnd = " << outputBestScoreVector[readno].qryRowEnd << "\n";
         }
       }
+#endif
 
       //
       // Phase 2 [comute cigar]
@@ -597,9 +601,7 @@ namespace psgl
 
         assert (readSet_P2.size() == readSet.size() );
 
-#ifndef VTUNE_SUPPORT
         alignToDAGLocal_Phase2(readSet_P2, graph, outputBestScoreVector);
-#endif
 
         auto tick2 = __rdtsc();
         std::cout << "TIMER, psgl::alignToDAG, CPU cycles spent in phase 2  = " << tick2 - tick1
