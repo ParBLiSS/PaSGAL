@@ -256,7 +256,7 @@ namespace psgl
     {
       assert (bestScoreVector.size() == readSet.size());
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(16)  
       for (size_t readno = 0; readno < readSet.size(); readno++)
       {
         //for time profiling within phase 2
@@ -288,6 +288,10 @@ namespace psgl
         //complete score matrix of size height x width to allow traceback
         //Note: to optimize storge, we only store vertical difference; absolute values of 
         //      which is bounded by gap penalty
+#ifdef DEBUG
+        std::cout << "INFO, psgl::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", memory requested= " << reducedWidth * reducedHeight << " bytes" << std::endl;
+#endif
+
         std::vector< std::vector<int8_t> > completeMatrixLog(reducedHeight, std::vector<int8_t>(reducedWidth, 0));
 
         {
