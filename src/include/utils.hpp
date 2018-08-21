@@ -226,6 +226,27 @@ namespace psgl
 
     std::cout << "--------\n" << std::endl;
   }
+
+  /**
+   * @brief                     print minimum, maximum and mean of thread runtimes
+   * @param[in] threadRunTime   vector containing individual thread execution time
+   * @return                    string containing min, max and mean
+   */
+  std::string printStats (std::vector<double> &threadRunTime)
+  {
+    auto min = *std::min_element(threadRunTime.begin(), threadRunTime.end());
+    auto max = *std::max_element(threadRunTime.begin(), threadRunTime.end());
+    auto mean = std::accumulate( threadRunTime.begin(), threadRunTime.end(), 0.0)/threadRunTime.size(); 
+
+    std::string stats;
+
+    stats += "min = " + std::to_string(min);
+    stats += ", max = " + std::to_string(max);
+    stats += ", mean = " + std::to_string(mean);
+    stats += ", count = " + std::to_string(threadRunTime.size());
+
+    return stats;
+  }
 }
 
 #endif

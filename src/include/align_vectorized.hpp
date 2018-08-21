@@ -263,9 +263,6 @@ namespace psgl
             __itt_resume();
 #endif
 
-            //for time profiling within phase 1
-            auto tick1 = __rdtsc();
-
             //init best score vector to zero bits
             std::fill (bestScores.begin(), bestScores.end(), _ZERO);
             std::fill (bestCols.begin(), bestCols.end(), _ZERO);
@@ -277,8 +274,12 @@ namespace psgl
             __m512i del512      = _SET1 ((int32_t) SCORE::del);
             __m512i ins512      = _SET1 ((int32_t) SCORE::ins);
 
+            std::vector<double> threadTimings (omp_get_max_threads(), 0);
+
 #pragma omp parallel
             {
+              threadTimings[omp_get_thread_num()] = omp_get_wtime();
+
               //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
@@ -303,7 +304,7 @@ namespace psgl
               std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
 
               //process SIMD_WIDTH reads in a single iteration
-#pragma omp for schedule(dynamic)
+#pragma omp for schedule(dynamic) nowait
               for (size_t i = 0; i < countReadBatches; i++)
               {
                 __m512i bestScores512 = _ZERO;
@@ -437,12 +438,12 @@ namespace psgl
                 bestCols[i]   = bestCols512; 
 
               } // all reads done
+
+              threadTimings[omp_get_thread_num()] = omp_get_wtime() - threadTimings[omp_get_thread_num()];
+
             } //end of omp parallel
 
-            auto tick2 = __rdtsc();
-
-            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_vectorized, CPU cycles spent in phase 1 (without wrapper) = " << tick2 - tick1
-              << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
+            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_vectorized, individual thread timings (s) : " << printStats(threadTimings) << "\n"; 
 
 #ifdef VTUNE_SUPPORT
             __itt_pause();
@@ -680,9 +681,6 @@ namespace psgl
             //__itt_resume();
 //#endif
 
-            //for time profiling within phase 1
-            auto tick1 = __rdtsc();
-
             //init best score vector to zero bits
             std::fill (bestScores.begin(), bestScores.end(), _ZERO);
             std::fill (bestCols.begin(), bestCols.end(), _ZERO);
@@ -694,8 +692,12 @@ namespace psgl
             __m512i del512      = _SET1 ((int32_t) SCORE::del);
             __m512i ins512      = _SET1 ((int32_t) SCORE::ins);
 
+            std::vector<double> threadTimings (omp_get_max_threads(), 0);
+
 #pragma omp parallel
             {
+              threadTimings[omp_get_thread_num()] = omp_get_wtime();
+
               //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
@@ -720,7 +722,7 @@ namespace psgl
               std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
 
               //process SIMD_WIDTH reads in a single iteration
-#pragma omp for schedule(dynamic)
+#pragma omp for schedule(dynamic) nowait
               for (size_t i = 0; i < countReadBatches; i++)
               {
                 __m512i fwdBestCols512;
@@ -886,12 +888,12 @@ namespace psgl
                 bestCols[i]   = bestCols512; 
 
               } // all reads done
+
+              threadTimings[omp_get_thread_num()] = omp_get_wtime() - threadTimings[omp_get_thread_num()];
+
             } //end of omp parallel
 
-            auto tick2 = __rdtsc();
-
-            std::cout << "TIMER, psgl::Phase1_Rev_Vectorized::alignToDAGLocal_Phase1_rev_vectorized , CPU cycles spent in phase 1-R (without wrapper) = " << tick2 - tick1
-              << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
+            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_Rev_Vectorized, individual thread timings (s) : " << printStats(threadTimings) << "\n"; 
 
 //#ifdef VTUNE_SUPPORT
             //__itt_pause();
