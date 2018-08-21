@@ -284,21 +284,39 @@ namespace psgl
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
               //buffer to save selected columns (associated with long hops) of DP matrix
-              std::vector< AlignedVecType > fartherColumns(graph.numVertices);
+              std::size_t countLongHops = std::count (withLongHop.begin(), withLongHop.end(), true);
+              AlignedVecType fartherColumnsBuffer (countLongHops * this->blockHeight);
 
-              //only allocate memory for selected vertices
-              for(VertexIdType i = 0; i < graph.numVertices; i++)
+              //for convenient access to 2D buffer
+              std::vector<__m512i*> fartherColumns(graph.numVertices);
               {
-                if ( this->withLongHop[i] )
-                  fartherColumns[i].resize(this->blockHeight);
+                size_t j = 0;
+
+                for(VertexIdType i = 0; i < graph.numVertices; i++)
+                  if ( this->withLongHop[i] )
+                    fartherColumns[i] = &fartherColumnsBuffer[ (j++) * this->blockHeight ];
               }
 
               //buffer to save neighboring column scores
-              std::vector< AlignedVecType > nearbyColumns (this->blockWidth, AlignedVecType(this->blockHeight));
+              AlignedVecType nearbyColumnsBuffer (this->blockWidth * this->blockHeight);
+
+              //for convenient access to 2D buffer
+              std::vector<__m512i*> nearbyColumns (this->blockWidth);
+              {
+                for (std::size_t i = 0; i < this->blockWidth; i++)
+                  nearbyColumns[i] = &nearbyColumnsBuffer[i * this->blockHeight];
+              }
 
               //buffer to save scores of last row in each iteration
               //one row for writing and one for reading
-              std::vector< AlignedVecType > lastBatchRow (2, AlignedVecType (graph.numVertices));
+              AlignedVecType lastBatchRowBuffer (2 * graph.numVertices);
+
+              //for convenient access to 2D buffer
+              std::vector<__m512i*> lastBatchRow (2);
+              {
+                lastBatchRow[0] = &lastBatchRowBuffer[0];
+                lastBatchRow[1] = &lastBatchRowBuffer[graph.numVertices];
+              }
 
               //buffer to save read charactes for innermost loop
               std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
@@ -312,7 +330,7 @@ namespace psgl
                 __m512i bestCols512   = _ZERO;
 
                 //reset DP 'lastBatchRow' buffer
-                std::fill (lastBatchRow[1].begin(), lastBatchRow[1].end(), _ZERO);
+                std::fill (lastBatchRowBuffer.begin(), lastBatchRowBuffer.end(), _ZERO);
 
                 int32_t qryBatchLength = readSet[sortedReadOrder[i*SIMD_WIDTH]].length();  //longest read in this batch
                 qryBatchLength += this->blockHeight - 1 - (qryBatchLength - 1) % this->blockHeight; //round-up
@@ -702,21 +720,39 @@ namespace psgl
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
               //buffer to save selected columns (associated with long hops) of DP matrix
-              std::vector< AlignedVecType > fartherColumns(graph.numVertices);
+              std::size_t countLongHops = std::count (withLongHop.begin(), withLongHop.end(), true);
+              AlignedVecType fartherColumnsBuffer (countLongHops * this->blockHeight);
 
-              //only allocate memory for selected vertices
-              for(VertexIdType i = 0; i < graph.numVertices; i++)
+              //for convenient access to 2D buffer
+              std::vector<__m512i*> fartherColumns(graph.numVertices);
               {
-                if ( this->withLongHop[i] )
-                  fartherColumns[i].resize(this->blockHeight);
+                size_t j = 0;
+
+                for(VertexIdType i = 0; i < graph.numVertices; i++)
+                  if ( this->withLongHop[i] )
+                    fartherColumns[i] = &fartherColumnsBuffer[ (j++) * this->blockHeight ];
               }
 
               //buffer to save neighboring column scores
-              std::vector< AlignedVecType > nearbyColumns (this->blockWidth, AlignedVecType(this->blockHeight));
+              AlignedVecType nearbyColumnsBuffer (this->blockWidth * this->blockHeight);
+
+              //for convenient access to 2D buffer
+              std::vector<__m512i*> nearbyColumns (this->blockWidth);
+              {
+                for (std::size_t i = 0; i < this->blockWidth; i++)
+                  nearbyColumns[i] = &nearbyColumnsBuffer[i * this->blockHeight];
+              }
 
               //buffer to save scores of last row in each iteration
               //one row for writing and one for reading
-              std::vector< AlignedVecType > lastBatchRow (2, AlignedVecType (graph.numVertices));
+              AlignedVecType lastBatchRowBuffer (2 * graph.numVertices);
+
+              //for convenient access to 2D buffer
+              std::vector<__m512i*> lastBatchRow (2);
+              {
+                lastBatchRow[0] = &lastBatchRowBuffer[0];
+                lastBatchRow[1] = &lastBatchRowBuffer[graph.numVertices];
+              }
 
               //buffer to save read charactes for innermost loop
               std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD_WIDTH * this->blockHeight);
@@ -752,7 +788,7 @@ namespace psgl
                 __m512i bestCols512   = _ZERO;
 
                 //reset DP 'lastBatchRow' buffer
-                std::fill (lastBatchRow[1].begin(), lastBatchRow[1].end(), _ZERO);
+                std::fill (lastBatchRowBuffer.begin(), lastBatchRowBuffer.end(), _ZERO);
 
                 int32_t qryBatchLength = readSet[sortedReadOrder[i*SIMD_WIDTH]].length();  //longest read in this batch
                 qryBatchLength += this->blockHeight - 1 - (qryBatchLength - 1) % this->blockHeight; //round-up
