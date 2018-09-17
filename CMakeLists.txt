@@ -47,7 +47,7 @@ message(STATUS "Warning: Using hard coded paths to locate protobuf library")
 
 ############
 #Configure PROTOBUF installation directory 
-set(PROTOBUF_INSTALL_DIRECTORY "/data/nfs_home/nasamo_data_backup/mpatwary_copy/current/ib01_bakcup/minconda_install_OLD/pkgs/libprotobuf-3.0.0-0")
+set(PROTOBUF_INSTALL_DIRECTORY "/work/04042/cjain7/stampede2/Intel/utility/protobuf-3.6.0/local_install")
 ############
 
 

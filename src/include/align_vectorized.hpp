@@ -74,7 +74,7 @@ namespace psgl
 
         //process these many vertical cells in a go
         //should be a power of 2
-        static constexpr size_t blockHeight = 8;   
+        static constexpr size_t blockHeight = 16;   
 
         /**
          * @brief                   public constructor

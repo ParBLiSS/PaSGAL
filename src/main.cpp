@@ -21,12 +21,13 @@ int main(int argc, char **argv)
   __itt_pause();
 #endif
 
-  std::string rfile = "", qfile = "", mode = "";
+  std::string rfile = "", qfile = "", mode = "", ofile = "";
 
   auto cli = (
       clipp::required("-m") & clipp::value("mode", mode).doc("reference graph format [vg or txt]"),
       clipp::required("-r") & clipp::value("ref", rfile).doc("reference graph file"),
-      clipp::required("-q") & clipp::value("query", qfile).doc("query file (fasta/fastq)[.gz]")
+      clipp::required("-q") & clipp::value("query", qfile).doc("query file (fasta/fastq)[.gz]"),
+      clipp::required("-o") & clipp::value("output", ofile).doc("output file")
       );
 
   if(!clipp::parse(argc, argv, cli)) 
@@ -62,6 +63,8 @@ int main(int argc, char **argv)
 
   if (psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL) == PSGL_STATUS_OK)
     std::cout << "INFO, psgl::main, run finished" << std::endl;
+
+  psgl::printResultsToFile (ofile, bestScoreVector);
 
 #ifdef DEBUG
   g.diCharGraph.printDegreeHistogram();

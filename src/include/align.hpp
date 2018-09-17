@@ -707,6 +707,27 @@ namespace psgl
 
       return PSGL_STATUS_OK;
     }
+
+  /**
+   * @brief     print alignment results to file
+   */
+  template <typename ScoreType>
+    void printResultsToFile ( const std::string &outputFile,
+        const std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector)
+    {
+      std::ofstream outstrm(outputFile);
+
+      for(auto &e : outputBestScoreVector)
+      {
+        outstrm << e.score << "\t"
+          << e.strand << "\t"
+          << e.qryRowStart << "\t" 
+          << e.qryRowEnd << "\t"
+          << e.refColumnStart << "\t"
+          << e.refColumnEnd << "\t"
+          << e.cigar << "\n";
+      }
+    }
 }
 
 #endif
