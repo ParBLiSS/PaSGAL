@@ -278,22 +278,27 @@ namespace psgl
 
 #pragma omp parallel
             {
+#pragma omp barrier
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
+
+              //create local copy of graph for faster access
+              const CSR_char_container<VertexIdType, EdgeIdType> graphLocal = this->graph;
+              const std::vector<bool> withLongHopLocal = withLongHop;
 
               //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
               //buffer to save selected columns (associated with long hops) of DP matrix
-              std::size_t countLongHops = std::count (withLongHop.begin(), withLongHop.end(), true);
+              std::size_t countLongHops = std::count (withLongHopLocal.begin(), withLongHopLocal.end(), true);
               AlignedVecType fartherColumnsBuffer (countLongHops * this->blockHeight);
 
               //for convenient access to 2D buffer
-              std::vector<__m512i*> fartherColumns(graph.numVertices);
+              std::vector<__m512i*> fartherColumns(graphLocal.numVertices);
               {
                 size_t j = 0;
 
-                for(VertexIdType i = 0; i < graph.numVertices; i++)
-                  if ( this->withLongHop[i] )
+                for(VertexIdType i = 0; i < graphLocal.numVertices; i++)
+                  if ( withLongHopLocal[i] )
                     fartherColumns[i] = &fartherColumnsBuffer[ (j++) * this->blockHeight ];
               }
 
@@ -309,13 +314,13 @@ namespace psgl
 
               //buffer to save scores of last row in each iteration
               //one row for writing and one for reading
-              AlignedVecType lastBatchRowBuffer (2 * graph.numVertices);
+              AlignedVecType lastBatchRowBuffer (2 * graphLocal.numVertices);
 
               //for convenient access to 2D buffer
               std::vector<__m512i*> lastBatchRow (2);
               {
                 lastBatchRow[0] = &lastBatchRowBuffer[0];
-                lastBatchRow[1] = &lastBatchRowBuffer[graph.numVertices];
+                lastBatchRow[1] = &lastBatchRowBuffer[graphLocal.numVertices];
               }
 
               //buffer to save read charactes for innermost loop
@@ -348,10 +353,10 @@ namespace psgl
                   }
 
                   //iterate over characters in reference graph
-                  for (int32_t k = 0; k < graph.numVertices; k++)
+                  for (int32_t k = 0; k < graphLocal.numVertices; k++)
                   {
                     //current reference character
-                    __m512i graphChar = _SET1 ((int32_t) graph.vertex_label[k] );
+                    __m512i graphChar = _SET1 ((int32_t) graphLocal.vertex_label[k] );
 
                     //current best score, init to 0
                     __m512i currentMax512;
@@ -376,19 +381,19 @@ namespace psgl
                       //which buffers to access depends on the value of 'l'
                       if (l == 0)
                       {
-                        for(size_t m = graph.offsets_in[k]; m < graph.offsets_in[k+1]; m++)
+                        for(size_t m = graphLocal.offsets_in[k]; m < graphLocal.offsets_in[k+1]; m++)
                         {
                           //paths with match mismatch edit
-                          __m512i substEdit = _ADD ( lastBatchRow[(loopJ - 1) & 1][ graph.adjcny_in[m] ], sub512);
+                          __m512i substEdit = _ADD ( lastBatchRow[(loopJ - 1) & 1][ graphLocal.adjcny_in[m] ], sub512);
                           currentMax512 = _MAX (currentMax512, substEdit); 
 
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (k - graph.adjcny_in[m] < blockWidth)
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (blockWidth-1)][l], del512);
+                          if (k - graphLocal.adjcny_in[m] < this->blockWidth)
+                            delEdit = _ADD ( nearbyColumns[graphLocal.adjcny_in[m] & (blockWidth-1)][l], del512);
                           else
-                            delEdit = _ADD ( fartherColumns[graph.adjcny_in[m]][l], del512);
+                            delEdit = _ADD ( fartherColumns[graphLocal.adjcny_in[m]][l], del512);
 
                           currentMax512 = _MAX (currentMax512, delEdit); 
                         }
@@ -399,7 +404,7 @@ namespace psgl
                       }
                       else
                       {
-                        for(size_t m = graph.offsets_in[k]; m < graph.offsets_in[k+1]; m++)
+                        for(size_t m = graphLocal.offsets_in[k]; m < graphLocal.offsets_in[k+1]; m++)
                         {
                           //paths with match mismatch edit
                           __m512i substEdit;
@@ -407,19 +412,20 @@ namespace psgl
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (k - graph.adjcny_in[m] < blockWidth)
+                          if (k - graphLocal.adjcny_in[m] < this->blockWidth)
                           {
-                            substEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (blockWidth-1)][l-1], sub512);
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_in[m] & (blockWidth-1)][l], del512);
+                            substEdit = _ADD ( nearbyColumns[graphLocal.adjcny_in[m] & (blockWidth-1)][l-1], sub512);
+                            delEdit = _ADD ( nearbyColumns[graphLocal.adjcny_in[m] & (blockWidth-1)][l], del512);
                           }
                           else
                           {
-                            substEdit = _ADD ( fartherColumns[graph.adjcny_in[m]][l-1], sub512);
-                            delEdit = _ADD ( fartherColumns[graph.adjcny_in[m]][l], del512);
+                            substEdit = _ADD ( fartherColumns[graphLocal.adjcny_in[m]][l-1], sub512);
+                            delEdit = _ADD ( fartherColumns[graphLocal.adjcny_in[m]][l], del512);
                           }
 
                           currentMax512 = _MAX (currentMax512, substEdit); 
                           currentMax512 = _MAX (currentMax512, delEdit); 
+
                         }
 
                         //insertion edit
@@ -441,7 +447,7 @@ namespace psgl
                       nearbyColumns[k & (blockWidth-1)][l] = currentMax512;
 
                       //save current score in large buffer if connected thru long hop
-                      if ( this->withLongHop[k] )
+                      if ( withLongHopLocal[k] )
                         fartherColumns[k][l] = currentMax512;
                     }
 
@@ -714,21 +720,26 @@ namespace psgl
 
 #pragma omp parallel
             {
+#pragma omp barrier
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
+
+              //create local copy of graph for faster access
+              const CSR_char_container<VertexIdType, EdgeIdType> graphLocal = this->graph;
+              const std::vector<bool> withLongHopLocal = withLongHop;
 
               //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
               //buffer to save selected columns (associated with long hops) of DP matrix
-              std::size_t countLongHops = std::count (withLongHop.begin(), withLongHop.end(), true);
+              std::size_t countLongHops = std::count (withLongHopLocal.begin(), withLongHopLocal.end(), true);
               AlignedVecType fartherColumnsBuffer (countLongHops * this->blockHeight);
 
               //for convenient access to 2D buffer
-              std::vector<__m512i*> fartherColumns(graph.numVertices);
+              std::vector<__m512i*> fartherColumns(graphLocal.numVertices);
               {
                 size_t j = 0;
 
-                for(VertexIdType i = 0; i < graph.numVertices; i++)
+                for(VertexIdType i = 0; i < graphLocal.numVertices; i++)
                   if ( this->withLongHop[i] )
                     fartherColumns[i] = &fartherColumnsBuffer[ (j++) * this->blockHeight ];
               }
@@ -745,13 +756,13 @@ namespace psgl
 
               //buffer to save scores of last row in each iteration
               //one row for writing and one for reading
-              AlignedVecType lastBatchRowBuffer (2 * graph.numVertices);
+              AlignedVecType lastBatchRowBuffer (2 * graphLocal.numVertices);
 
               //for convenient access to 2D buffer
               std::vector<__m512i*> lastBatchRow (2);
               {
                 lastBatchRow[0] = &lastBatchRowBuffer[0];
-                lastBatchRow[1] = &lastBatchRowBuffer[graph.numVertices];
+                lastBatchRow[1] = &lastBatchRowBuffer[graphLocal.numVertices];
               }
 
               //buffer to save read charactes for innermost loop
@@ -806,10 +817,10 @@ namespace psgl
                   }
 
                   //iterate over characters in reference graph
-                  for (int32_t k = graph.numVertices - 1; k >= 0; k--)
+                  for (int32_t k = graphLocal.numVertices - 1; k >= 0; k--)
                   {
                     //current reference character
-                    __m512i graphChar = _SET1 ((int32_t) graph.vertex_label[k] );
+                    __m512i graphChar = _SET1 ((int32_t) graphLocal.vertex_label[k] );
 
                     //current best score, init to 0
                     __m512i currentMax512;
@@ -834,19 +845,19 @@ namespace psgl
                       //which buffers to access depends on the value of 'l'
                       if (l == 0)
                       {
-                        for(size_t m = graph.offsets_out[k]; m < graph.offsets_out[k+1]; m++)
+                        for(size_t m = graphLocal.offsets_out[k]; m < graphLocal.offsets_out[k+1]; m++)
                         {
                           //paths with match mismatch edit
-                          __m512i substEdit = _ADD ( lastBatchRow[(loopJ - 1) & 1][ graph.adjcny_out[m] ], sub512);
+                          __m512i substEdit = _ADD ( lastBatchRow[(loopJ - 1) & 1][ graphLocal.adjcny_out[m] ], sub512);
                           currentMax512 = _MAX (currentMax512, substEdit); 
 
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (graph.adjcny_out[m] - k < blockWidth)
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (blockWidth-1)][l], del512);
+                          if (graphLocal.adjcny_out[m] - k < this->blockWidth)
+                            delEdit = _ADD ( nearbyColumns[graphLocal.adjcny_out[m] & (blockWidth-1)][l], del512);
                           else
-                            delEdit = _ADD ( fartherColumns[graph.adjcny_out[m]][l], del512);
+                            delEdit = _ADD ( fartherColumns[graphLocal.adjcny_out[m]][l], del512);
 
                           currentMax512 = _MAX (currentMax512, delEdit); 
                         }
@@ -857,7 +868,7 @@ namespace psgl
                       }
                       else
                       {
-                        for(size_t m = graph.offsets_out[k]; m < graph.offsets_out[k+1]; m++)
+                        for(size_t m = graphLocal.offsets_out[k]; m < graphLocal.offsets_out[k+1]; m++)
                         {
                           //paths with match mismatch edit
                           __m512i substEdit;
@@ -865,15 +876,15 @@ namespace psgl
                           //paths with deletion edit
                           __m512i delEdit;
 
-                          if (graph.adjcny_out[m] - k < blockWidth)
+                          if (graphLocal.adjcny_out[m] - k < this->blockWidth)
                           {
-                            substEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (blockWidth-1)][l-1], sub512);
-                            delEdit = _ADD ( nearbyColumns[graph.adjcny_out[m] & (blockWidth-1)][l], del512);
+                            substEdit = _ADD ( nearbyColumns[graphLocal.adjcny_out[m] & (blockWidth-1)][l-1], sub512);
+                            delEdit = _ADD ( nearbyColumns[graphLocal.adjcny_out[m] & (blockWidth-1)][l], del512);
                           }
                           else
                           {
-                            substEdit = _ADD ( fartherColumns[graph.adjcny_out[m]][l-1], sub512);
-                            delEdit = _ADD ( fartherColumns[graph.adjcny_out[m]][l], del512);
+                            substEdit = _ADD ( fartherColumns[graphLocal.adjcny_out[m]][l-1], sub512);
+                            delEdit = _ADD ( fartherColumns[graphLocal.adjcny_out[m]][l], del512);
                           }
 
                           currentMax512 = _MAX (currentMax512, substEdit); 
@@ -909,7 +920,7 @@ namespace psgl
                       nearbyColumns[k & (blockWidth-1)][l] = currentMax512;
 
                       //save current score in large buffer if connected thru long hop
-                      if ( this->withLongHop[k] )
+                      if ( withLongHopLocal[k] )
                         fartherColumns[k][l] = currentMax512;
                     }
 
