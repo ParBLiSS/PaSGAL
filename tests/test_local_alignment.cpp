@@ -28,13 +28,11 @@ TEST(localAlignment, singleQuerySequential_vg)
   auto rfile = dir + "/BRCA1_seq_graph.vg";
   auto qfile = dir + "/BRCA1_1_read.fastq";
 
-  using VertexIdType = uint32_t;
-  using EdgeIdType = uint32_t;
   using ScoreType = int32_t;
 
   //load graph
 
-  psgl::graphLoader<VertexIdType, EdgeIdType> g;
+  psgl::graphLoader g;
   g.loadFromVG(rfile);
 
   std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
@@ -64,13 +62,11 @@ TEST(localAlignment, singleQuerySequential_txt)
   auto rfile = dir + "/BRCA1_seq_graph.txt";
   auto qfile = dir + "/BRCA1_1_read.fastq";
 
-  using VertexIdType = uint32_t;
-  using EdgeIdType = uint32_t;
   using ScoreType = int32_t;
 
   //load graph
 
-  psgl::graphLoader<VertexIdType, EdgeIdType> g;
+  psgl::graphLoader g;
   g.loadFromTxt(rfile);
 
   std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
@@ -100,13 +96,11 @@ TEST(localAlignment, multipleQueryParallelScore_vg)
   auto rfile = dir + "/BRCA1_seq_graph.vg";
   auto qfile = dir + "/BRCA1_5_reads.fastq";
 
-  using VertexIdType = uint32_t;
-  using EdgeIdType = uint32_t;
   using ScoreType = int32_t;
 
   //load graph
 
-  psgl::graphLoader<VertexIdType, EdgeIdType> g;
+  psgl::graphLoader g;
   g.loadFromVG(rfile);
 
   std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
@@ -148,13 +142,11 @@ TEST(localAlignment, multipleQueryParallelScore_txt)
   auto rfile = dir + "/BRCA1_seq_graph.txt";
   auto qfile = dir + "/BRCA1_5_reads.fastq";
 
-  using VertexIdType = uint32_t;
-  using EdgeIdType = uint32_t;
   using ScoreType = int32_t;
 
   //load graph
 
-  psgl::graphLoader<VertexIdType, EdgeIdType> g;
+  psgl::graphLoader g;
   g.loadFromTxt(rfile);
 
   std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;

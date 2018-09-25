@@ -43,11 +43,9 @@ int main(int argc, char **argv)
   std::cout << "INFO, psgl::main, reference file = " << rfile << " (in " << mode  << " format) " << std::endl;
   std::cout << "INFO, psgl::main, query file = " << qfile << std::endl;
 
-  using VertexIdType = int32_t;
-  using EdgeIdType = int32_t;
   using ScoreType = int32_t;
 
-  psgl::graphLoader<VertexIdType, EdgeIdType> g;
+  psgl::graphLoader g;
 
   if (mode.compare("vg") == 0)
     g.loadFromVG(rfile);
@@ -65,10 +63,4 @@ int main(int argc, char **argv)
     std::cout << "INFO, psgl::main, run finished" << std::endl;
 
   psgl::printResultsToFile (ofile, bestScoreVector);
-
-#ifdef DEBUG
-  g.diCharGraph.printDegreeHistogram();
-  g.diCharGraph.printHopLengthHistogram();
-  g.printGraph();
-#endif
 }

@@ -36,10 +36,10 @@ namespace psgl
    *                                vector size is same as count of the reads
    * @note                          reverse complement of the read is not handled here
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGLocal_Phase1_scalar(  const std::vector<std::string> &readSet,
-                                  const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-                                  std::vector< BestScoreInfo<ScoreType> > &bestScoreVector)
+  template <typename ScoreType>
+    void alignToDAGLocal_Phase1_scalar( const std::vector<std::string> &readSet,
+                                        const CSR_char_container &graph,
+                                        std::vector< BestScoreInfo<ScoreType> > &bestScoreVector)
     {
       assert (bestScoreVector.size() == readSet.size());
 
@@ -139,10 +139,10 @@ namespace psgl
    *                                vector size is same as count of the reads
    * @note                          reverse complement of the read is not handled here
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAGLocal_Phase1_rev_scalar(  const std::vector<std::string> &readSet,
-                                  const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-                                  std::vector< BestScoreInfo<ScoreType> > &bestScoreVector)
+  template <typename ScoreType>
+    void alignToDAGLocal_Phase1_rev_scalar( const std::vector<std::string> &readSet,
+                                            const CSR_char_container &graph,
+                                            std::vector< BestScoreInfo<ScoreType> > &bestScoreVector)
     {
       assert (bestScoreVector.size() == readSet.size());
 
@@ -249,9 +249,9 @@ namespace psgl
    * @note                          we assume that query sequences are oriented properly
    *                                after executing the alignment phase 1
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
+  template <typename ScoreType>
     void alignToDAGLocal_Phase2(  const std::vector<std::string> &readSet,
-                                  const CSR_char_container<VertexIdType, EdgeIdType> &graph,
+                                  const CSR_char_container &graph,
                                   std::vector< BestScoreInfo<ScoreType> > &bestScoreVector)
     {
       assert (bestScoreVector.size() == readSet.size());
@@ -496,10 +496,10 @@ namespace psgl
    * @param[in]   graph                   node-labeled directed graph 
    * @param[out]  outputBestScoreVector
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
+  template <typename ScoreType>
     void alignToDAGLocal( const std::vector<std::string> &readSet,
-        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-        std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector)
+                          const CSR_char_container &graph,
+                          std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector)
     {
       //create buffer to save best score info for each read and its rev. complement
       std::vector< BestScoreInfo<ScoreType> > bestScoreVector_P1 (2 * readSet.size() );
@@ -531,7 +531,7 @@ namespace psgl
 
         //align read to ref.
 #ifdef __AVX512BW__
-        Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType> obj (readSet_P1, graph); 
+        Phase1_Vectorized<ScoreType> obj (readSet_P1, graph); 
         obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
 #else
         alignToDAGLocal_Phase1_scalar(readSet_P1, graph, bestScoreVector_P1);
@@ -578,7 +578,7 @@ namespace psgl
 
         //align reverse read to ref.
 #ifdef __AVX512BW__
-        Phase1_Rev_Vectorized<ScoreType, VertexIdType, EdgeIdType> obj (readSet_P1_R, graph); 
+        Phase1_Rev_Vectorized<ScoreType> obj (readSet_P1_R, graph); 
         obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
 #else
         alignToDAGLocal_Phase1_rev_scalar(readSet_P1_R, graph, outputBestScoreVector);
@@ -636,20 +636,19 @@ namespace psgl
    * @param[out]  outputBestScoreVector
    * @param[in]   mode
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    void alignToDAG(const std::vector<std::string> &reads, 
-        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-        std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector,
-        const MODE mode)  
+  template <typename ScoreType>
+    void alignToDAG(  const std::vector<std::string> &reads, 
+                      const CSR_char_container &graph,
+                      std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector,
+                      const MODE mode)  
     {
       static_assert(std::is_signed<ScoreType>::value, 
           "ERROR, psgl::alignToDAG, ScoreType must be a signed type");
 
+      //TODO: Support other alignment modes: global and semi-global
       switch(mode)
       {
-        //case GLOBAL : alignToDAGGlobal<ScoreType> (reads, graph); break;
         case LOCAL : alignToDAGLocal<ScoreType> (reads, graph, outputBestScoreVector); break;
-        //case SEMIGLOBAL: alignToDAGSemiGlobal<ScoreType> (reads, graph); break;
         default: std::cerr << "ERROR, psgl::alignToDAG, Invalid alignment mode"; exit(1);
       }
     }
@@ -662,11 +661,11 @@ namespace psgl
    * @param[out]  outputBestScoreVector
    * @param[in]   mode
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
-    int alignToDAG(const std::string &qfile, 
-        const CSR_char_container<VertexIdType, EdgeIdType> &graph,
-        std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector,
-        const MODE mode)  
+  template <typename ScoreType>
+    int alignToDAG( const std::string &qfile, 
+                    const CSR_char_container &graph,
+                    std::vector< BestScoreInfo<ScoreType> > &outputBestScoreVector,
+                    const MODE mode)  
     {
       //Parse all reads into a vector
       std::vector<std::string> reads;

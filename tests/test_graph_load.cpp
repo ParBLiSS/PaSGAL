@@ -21,12 +21,9 @@ TEST(graphLoad, graphLoadTxt)
   std::string file = FOLDER;
   file = file + "/BRCA1_seq_graph.txt";
 
-  using VertexIdType = uint32_t;
-  using EdgeIdType = uint32_t;
-
   //load graph
 
-  psgl::graphLoader<VertexIdType, EdgeIdType> g;
+  psgl::graphLoader g;
   g.loadFromTxt(file);
   auto &graph = g.diCharGraph;
 
@@ -45,12 +42,9 @@ TEST(graphLoad, graphLoadVG)
   std::string file = FOLDER;
   file = file + "/BRCA1_seq_graph.vg";
 
-  using VertexIdType = uint32_t;
-  using EdgeIdType = uint32_t;
-
   //load graph
 
-  psgl::graphLoader<VertexIdType, EdgeIdType> g;
+  psgl::graphLoader g;
   g.loadFromVG(file);
   auto &graph = g.diCharGraph;
 

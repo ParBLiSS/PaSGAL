@@ -28,289 +28,248 @@ namespace psgl
    *              ending at (but not including) index offsets_in[i+1]
    *            - CSR_char_container should be built using existing 
    *              CSR_container (see class constructor)
+   *
+   *            - Assumption: count of vertices and edges < 2B because we are
+   *              using int32_t type everywhere
    */
-  template <typename VertexIdType, typename EdgeIdType>
-    class CSR_char_container
-    {
-      public:
+  class CSR_char_container
+  {
+    public:
 
-        //Count of edges and vertices in the graph
-        VertexIdType numVertices;
-        EdgeIdType numEdges;
+      //Count of edges and vertices in the graph
+      int32_t numVertices;
+      int32_t numEdges;
 
-        //contiguous adjacency list of all vertices, size = numEdges
-        std::vector<VertexIdType> adjcny_in;  
-        std::vector<VertexIdType> adjcny_out;  
+      //contiguous adjacency list of all vertices, size = numEdges
+      std::vector<int32_t> adjcny_in;  
+      std::vector<int32_t> adjcny_out;  
 
-        //offsets in adjacency list for each vertex, size = numVertices + 1
-        std::vector<EdgeIdType> offsets_in;
-        std::vector<EdgeIdType> offsets_out;
+      //offsets in adjacency list for each vertex, size = numVertices + 1
+      std::vector<int32_t> offsets_in;
+      std::vector<int32_t> offsets_out;
 
-        //Container to hold character label of all vertices in graph
-        std::vector<char> vertex_label;
+      //Container to hold character label of all vertices in graph
+      std::vector<char> vertex_label;
 
 
-        /**
-         * @brief             build complete CSR_char graph
-         * @param[in]   csr   CSR graph container
-         */
-        void build (CSR_container<VertexIdType, EdgeIdType> &csr)
+      /**
+       * @brief             build complete CSR_char graph
+       * @param[in]   csr   CSR graph container
+       */
+      void build (CSR_container &csr)
+      {
+        this->numVertices = csr.totalRefLength();
+
+        vertex_label.reserve (csr.totalRefLength());
+
+        adjcny_in.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
+        adjcny_out.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
+
+        offsets_in.reserve (csr.totalRefLength() + 1);
+        offsets_out.reserve (csr.totalRefLength() + 1);
+
+        //Save vertex labels
         {
-          this->numVertices = csr.totalRefLength();
-          
-          vertex_label.reserve (csr.totalRefLength());
+          for (auto &seq : csr.vertex_metadata) 
+            for (auto &c : seq)
+              vertex_label.push_back(c);
+        }
 
-          adjcny_in.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
-          adjcny_out.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
-
-          offsets_in.reserve (csr.totalRefLength() + 1);
-          offsets_out.reserve (csr.totalRefLength() + 1);
-
-          //Save vertex labels
+        //Init edges:
+        {
+          // in edges
           {
-            for (auto &seq : csr.vertex_metadata) 
-              for (auto &c : seq)
-                vertex_label.push_back(c);
+            offsets_in.push_back(0);
+            std::vector<int32_t> inNeighbors;
 
-          }
-
-          //Init edges:
-          {
-            // in edges
+            for (graphIterFwd g(csr); !g.end(); g.next())
             {
-              offsets_in.push_back(0);
-              std::vector<VertexIdType> inNeighbors;
+              //get preceeding dependency offsets from graph
+              inNeighbors.clear();
+              g.getInNeighborOffsets(inNeighbors);
 
-              for (graphIterFwd <VertexIdType, EdgeIdType> g(csr); !g.end(); g.next())
-              {
-                //get preceeding dependency offsets from graph
-                inNeighbors.clear();
-                g.getInNeighborOffsets(inNeighbors);
+              for(auto &e : inNeighbors)
+                adjcny_in.push_back(e);
 
-                for(auto &e : inNeighbors)
-                  adjcny_in.push_back(e);
-
-                offsets_in.push_back (adjcny_in.size());
-              }
-            }
-
-            // out edges
-            {
-              offsets_out.push_back(0);
-              std::vector<VertexIdType> outNeighbors;
-
-              for (graphIterFwd <VertexIdType, EdgeIdType> g(csr); !g.end(); g.next())
-              {
-                //get preceeding dependency offsets from graph
-                outNeighbors.clear();
-                g.getOutNeighborOffsets(outNeighbors);
-
-                for(auto &e : outNeighbors)
-                  adjcny_out.push_back(e);
-
-                offsets_out.push_back (adjcny_out.size());
-              }
+              offsets_in.push_back (adjcny_in.size());
             }
           }
 
-          this->numEdges = adjcny_in.size();
+          // out edges
+          {
+            offsets_out.push_back(0);
+            std::vector<int32_t> outNeighbors;
 
-          assert(vertex_label.size() == this->numVertices);
+            for (graphIterFwd g(csr); !g.end(); g.next())
+            {
+              //get preceeding dependency offsets from graph
+              outNeighbors.clear();
+              g.getOutNeighborOffsets(outNeighbors);
 
-          assert(adjcny_in.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);
-          assert(adjcny_out.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);
+              for(auto &e : outNeighbors)
+                adjcny_out.push_back(e);
 
-          assert(offsets_in.size() ==  csr.totalRefLength() + 1);
-          assert(offsets_out.size() ==  csr.totalRefLength() + 1);
+              offsets_out.push_back (adjcny_out.size());
+            }
+          }
+        }
+
+        this->numEdges = adjcny_in.size();
+
+        assert(vertex_label.size() == this->numVertices);
+
+        assert(adjcny_in.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);
+        assert(adjcny_out.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);
+
+        assert(offsets_in.size() ==  csr.totalRefLength() + 1);
+        assert(offsets_out.size() ==  csr.totalRefLength() + 1);
 
 #ifndef NDEBUG
-          this->verify();
+        this->verify();
 #endif
 
-          std::cout << "INFO, psgl::CSR_char_container::build, graph converted to CSR format with character labels, n = " << this->numVertices << ", m = " << this->numEdges << std::endl;
-        }
+        std::cout << "INFO, psgl::CSR_char_container::build, graph converted to CSR format with character labels, n = " << this->numVertices << ", m = " << this->numEdges << std::endl;
+      }
 
-        /**
-         * @brief             compute farthest reachable vertex on left side
-         * @param[in]   v     id of starting vertex (where alignment ends)
-         * @param[in]   dist  alignment length bound
-         * @details           useful to determining traceback range in DP
-         */
-        VertexIdType computeLeftMostReachableVertex(VertexIdType v, std::size_t dist) const
+      /**
+       * @brief             compute and print histogram of degree values
+       */
+      void printDegreeHistogram () const
+      {
+        std::cout << "Printing degree distribution ..." << "\n"; 
+
+        int32_t maxDegree = 0;
+
+        //compute maximum degree in the graph
+        for(int32_t i = 0; i < this->numVertices; i++)
+          for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+            maxDegree = std::max (maxDegree, offsets_in[i+1] - offsets_in[i]);
+
+        std::vector<int32_t> degreeHist (maxDegree + 1, 0);
+
+        //compute histogram
+        for(int32_t i = 0; i < this->numVertices; i++)
+          for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+            degreeHist [offsets_in[i+1] - offsets_in[i] ]++; 
+
+        for(int32_t i = 0; i <= maxDegree; i++)
+          if (degreeHist[i] > 0)
+            std::cout << i << " : " << degreeHist[i] << "\n"; 
+
+        std::cout.flush();
+      }
+
+      /**
+       * @brief             compute and print histogram of hop distances in 
+       *                    the sorted order
+       */
+      void printHopLengthHistogram() const
+      {
+        std::cout << "Printing hop length distribution  ..." << "\n"; 
+
+        //get maximum hop length
+        int32_t maxHopLength = this->directedBandwidth();
+
+        std::vector<int32_t> hopLengthHist (maxHopLength + 1, 0);
+
+        //compute histogram
+        for(int32_t i = 0; i < this->numVertices; i++)
+          for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+            hopLengthHist [ i - adjcny_in[j] ] ++;
+
+        for(int32_t i = 0; i <= maxHopLength; i++)
+          if (hopLengthHist[i] > 0)
+            std::cout << i << " : " << hopLengthHist[i] << "\n"; 
+
+        std::cout.flush();
+      }
+
+    private:
+
+      /**
+       * @brief                   compute maximum distance between connected vertices in the graph (a.k.a. 
+       *                          directed bandwidth)
+       * @return                  directed graph bandwidth
+       */
+      std::size_t directedBandwidth() const
+      {
+        std::size_t bandwidth = 0;   //temporary value 
+
+        //iterate over all vertices in graph to compute bandwidth
+        for(int32_t i = 0; i < this->numVertices; i++)
         {
-          assert(v >= 0 && v < this->numVertices);
-
-          //trivial case
-          if (v == 0)
-            return 0;
-
-          //Initialize a distance vector for vertices {0, 1,... , v-1, v}
-          std::vector<std::size_t> distvec(v+1, dist);
-
-          //Initialize distance of starting vertex
-          distvec[v] = 0;
-
-          //Traverse vertices in reverse of topological sorted order
-          for (VertexIdType i = v; i != (VertexIdType) -1; i--)
+          for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
           {
-            //Update in-neigbors of vertex i
-            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
-            {
-              assert( adjcny_in[j] < i );
+            auto from_pos = adjcny_in[j];
+            auto to_pos = i;
 
-              distvec[ adjcny_in[j] ] = std::min( distvec[ adjcny_in[j] ] , distvec[i] + 1 );
-            }
+            assert(to_pos > from_pos);
+
+            if (to_pos - from_pos > bandwidth)
+              bandwidth = to_pos - from_pos;
           }
-
-          //Check the leftmost vertex inside dist
-          for (VertexIdType i = 0; i <= v; i++)
-          {
-            if (distvec[i] < dist)
-              return i;
-          }
-
-          return 0;
         }
 
-        /**
-         * @brief             compute and print histogram of degree values
-         */
-        void printDegreeHistogram () const
+        return bandwidth;
+      }
+
+      /**
+       * @brief     sanity check for correctness of graph storage in CSR format
+       */
+      void verify() const
+      {
+        assert(this->numVertices > 0);
+        assert(this->numEdges > 0);
+
+        //labels
         {
-          std::cout << "Printing degree distribution ..." << "\n"; 
+          assert(vertex_label.size() == this->numVertices);
 
-          VertexIdType maxDegree = 0;
-
-          //compute maximum degree in the graph
-          for(VertexIdType i = 0; i < this->numVertices; i++)
-            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
-              maxDegree = std::max (maxDegree, offsets_in[i+1] - offsets_in[i]);
-
-          std::vector<VertexIdType> degreeHist (maxDegree + 1, 0);
-
-          //compute histogram
-          for(VertexIdType i = 0; i < this->numVertices; i++)
-            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
-              degreeHist [offsets_in[i+1] - offsets_in[i] ]++; 
-
-          for(VertexIdType i = 0; i <= maxDegree; i++)
-            if (degreeHist[i] > 0)
-              std::cout << i << " : " << degreeHist[i] << "\n"; 
-
-          std::cout.flush();
+          for(auto &c : vertex_label)
+          {
+            assert(std::isupper(c));
+            assert(c == 'A' || c == 'T' || c == 'G' || c == 'C' || c == 'N');
+          }
         }
 
-        /**
-         * @brief             compute and print histogram of hop distances in 
-         *                    the sorted order
-         */
-        void printHopLengthHistogram() const
+        //adjacency list
         {
-          std::cout << "Printing hop length distribution  ..." << "\n"; 
+          assert(adjcny_in.size() == this->numEdges);
+          assert(adjcny_out.size() == this->numEdges);
 
-          //get maximum hop length
-          VertexIdType maxHopLength = this->directedBandwidth();
+          for(auto vId : adjcny_in)
+            assert(vId >=0 && vId < this->numVertices);
 
-          std::vector<VertexIdType> hopLengthHist (maxHopLength + 1, 0);
-
-          //compute histogram
-          for(VertexIdType i = 0; i < this->numVertices; i++)
-            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
-              hopLengthHist [ i - adjcny_in[j] ] ++;
-
-          for(VertexIdType i = 0; i <= maxHopLength; i++)
-            if (hopLengthHist[i] > 0)
-              std::cout << i << " : " << hopLengthHist[i] << "\n"; 
-
-          std::cout.flush();
+          for(auto vId : adjcny_out)
+            assert(vId >=0 && vId < this->numVertices);
         }
 
-      private:
-
-        /**
-         * @brief                   compute maximum distance between connected vertices in the graph (a.k.a. 
-         *                          directed bandwidth)
-         * @return                  directed graph bandwidth
-         */
-        std::size_t directedBandwidth() const
+        //offset array
         {
-          std::size_t bandwidth = 0;   //temporary value 
+          assert(offsets_in.size() == this->numVertices + 1);
+          assert(std::is_sorted(offsets_in.begin(), offsets_in.end()));
+          assert(offsets_in.front() == 0 && offsets_in.back() == this->numEdges);
 
-          //iterate over all vertices in graph to compute bandwidth
-          for(VertexIdType i = 0; i < this->numVertices; i++)
-          {
-            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
-            {
-              auto from_pos = adjcny_in[j];
-              auto to_pos = i;
+          assert(offsets_out.size() == this->numVertices + 1);
+          assert(std::is_sorted(offsets_out.begin(), offsets_out.end()));
+          assert(offsets_out.front() == 0 && offsets_out.back() == this->numEdges);
 
-              assert(to_pos > from_pos);
-
-              if (to_pos - from_pos > bandwidth)
-                bandwidth = to_pos - from_pos;
-            }
-          }
-
-          return bandwidth;
+          for(auto off : offsets_out)
+            assert(off >=0 && off <= this->numEdges); 
         }
 
-        /**
-         * @brief     sanity check for correctness of graph storage in CSR format
-         */
-        void verify() const
+        //topologically sorted order
         {
-          assert(this->numVertices > 0);
-          assert(this->numEdges > 0);
+          for(int32_t i = 0; i < this->numVertices; i++)
+            for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
+              assert( adjcny_in[j] < i);
 
-          //labels
-          {
-            assert(vertex_label.size() == this->numVertices);
-
-            for(auto &c : vertex_label)
-            {
-              assert(std::isupper(c));
-              assert(c == 'A' || c == 'T' || c == 'G' || c == 'C' || c == 'N');
-            }
-          }
-
-          //adjacency list
-          {
-            assert(adjcny_in.size() == this->numEdges);
-            assert(adjcny_out.size() == this->numEdges);
-
-            for(auto vId : adjcny_in)
-              assert(vId >=0 && vId < this->numVertices);
-
-            for(auto vId : adjcny_out)
-              assert(vId >=0 && vId < this->numVertices);
-          }
-
-          //offset array
-          {
-            assert(offsets_in.size() == this->numVertices + 1);
-            assert(std::is_sorted(offsets_in.begin(), offsets_in.end()));
-            assert(offsets_in.front() == 0 && offsets_in.back() == this->numEdges);
-
-            assert(offsets_out.size() == this->numVertices + 1);
-            assert(std::is_sorted(offsets_out.begin(), offsets_out.end()));
-            assert(offsets_out.front() == 0 && offsets_out.back() == this->numEdges);
-
-            for(auto off : offsets_out)
-              assert(off >=0 && off <= this->numEdges); 
-          }
-
-          //topologically sorted order
-          {
-            for(VertexIdType i = 0; i < this->numVertices; i++)
-              for(auto j = offsets_in[i]; j < offsets_in[i+1]; j++)
-                assert( adjcny_in[j] < i);
-
-            for(VertexIdType i = 0; i < this->numVertices; i++)
-              for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
-                assert( adjcny_out[j] > i);
-          }
+          for(int32_t i = 0; i < this->numVertices; i++)
+            for(auto j = offsets_out[i]; j < offsets_out[i+1]; j++)
+              assert( adjcny_out[j] > i);
         }
-    };
+      }
+  };
 }
 
 #endif

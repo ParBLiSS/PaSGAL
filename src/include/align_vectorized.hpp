@@ -39,13 +39,13 @@ namespace psgl
   /**
    * @brief   Supports phase 1 DP in forward direction
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
+  template <typename ScoreType>
     class Phase1_Vectorized
     {
       private:
 
         //reference graph
-        const CSR_char_container<VertexIdType, EdgeIdType> &graph;
+        const CSR_char_container &graph;
 
         // pre-compute which graph vertices are connected with hop longer
         // than 'blockWidth'
@@ -82,12 +82,11 @@ namespace psgl
          * @param[in]   g           input reference graph
          */
         Phase1_Vectorized(const std::vector<std::string> &readSet, 
-            const CSR_char_container<VertexIdType, EdgeIdType> &g) :
+            const CSR_char_container &g) :
           readSet (readSet), graph (g)
         {
           //Type checks
           static_assert(std::is_same<ScoreType, int32_t>::value, "ScoreType needs to be int32_t for now");
-          assert (sizeof(VertexIdType) <= 32);
 
           this->sortReadsForLoadBalance();
           this->convertToSOA();
@@ -222,7 +221,7 @@ namespace psgl
 
           this->withLongHop.resize(graph.numVertices, false);
 
-          for(VertexIdType i = 0; i < graph.numVertices; i++)
+          for(int32_t i = 0; i < graph.numVertices; i++)
           {
             for(auto j = graph.offsets_in[i]; j < graph.offsets_in[i+1]; j++)
             {
@@ -282,7 +281,7 @@ namespace psgl
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
 
               //create local copy of graph for faster access
-              const CSR_char_container<VertexIdType, EdgeIdType> graphLocal = this->graph;
+              const CSR_char_container graphLocal = this->graph;
               const std::vector<bool> withLongHopLocal = withLongHop;
 
               //type def. for memory-aligned vector allocation for SIMD instructions
@@ -297,7 +296,7 @@ namespace psgl
               {
                 size_t j = 0;
 
-                for(VertexIdType i = 0; i < graphLocal.numVertices; i++)
+                for(int32_t i = 0; i < graphLocal.numVertices; i++)
                   if ( withLongHopLocal[i] )
                     fartherColumns[i] = &fartherColumnsBuffer[ (j++) * this->blockHeight ];
               }
@@ -478,13 +477,13 @@ namespace psgl
   /**
    * @brief   Supports phase 1 DP in reverse direction
    */
-  template <typename ScoreType, typename VertexIdType, typename EdgeIdType>
+  template <typename ScoreType>
     class Phase1_Rev_Vectorized
     {
       private:
 
         //reference graph
-        const CSR_char_container<VertexIdType, EdgeIdType> &graph;
+        const CSR_char_container &graph;
 
         // pre-compute which graph vertices are connected with hop longer
         // than 'blockWidth'
@@ -507,11 +506,11 @@ namespace psgl
 
         //small temporary storage buffer for DP scores
         //should be a power of 2
-        static constexpr size_t blockWidth = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::blockWidth; 
+        static constexpr size_t blockWidth = Phase1_Vectorized<ScoreType>::blockWidth; 
 
         //process these many vertical cells in a go
         //should be a power of 2
-        static constexpr size_t blockHeight = Phase1_Vectorized<ScoreType, VertexIdType, EdgeIdType>::blockHeight;   
+        static constexpr size_t blockHeight = Phase1_Vectorized<ScoreType>::blockHeight;   
 
       public:
 
@@ -521,12 +520,11 @@ namespace psgl
          * @param[in]   g           input reference graph
          */
         Phase1_Rev_Vectorized(const std::vector<std::string> &readSet, 
-            const CSR_char_container<VertexIdType, EdgeIdType> &g) :
+            const CSR_char_container &g) :
           readSet (readSet), graph (g)
         {
           //Type checks
           static_assert(std::is_same<ScoreType, int32_t>::value, "ScoreType needs to be int32_t for now");
-          assert (sizeof(VertexIdType) <= 32);
 
           this->sortReadsForLoadBalance();
           this->convertToSOA();
@@ -661,7 +659,7 @@ namespace psgl
 
           this->withLongHop.resize(graph.numVertices, false);
 
-          for(VertexIdType i = 0; i < graph.numVertices; i++)
+          for(int32_t i = 0; i < graph.numVertices; i++)
           {
             for(auto j = graph.offsets_in[i]; j < graph.offsets_in[i+1]; j++)
             {
@@ -724,7 +722,7 @@ namespace psgl
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
 
               //create local copy of graph for faster access
-              const CSR_char_container<VertexIdType, EdgeIdType> graphLocal = this->graph;
+              const CSR_char_container graphLocal = this->graph;
               const std::vector<bool> withLongHopLocal = withLongHop;
 
               //type def. for memory-aligned vector allocation for SIMD instructions
@@ -739,7 +737,7 @@ namespace psgl
               {
                 size_t j = 0;
 
-                for(VertexIdType i = 0; i < graphLocal.numVertices; i++)
+                for(int32_t i = 0; i < graphLocal.numVertices; i++)
                   if ( this->withLongHop[i] )
                     fartherColumns[i] = &fartherColumnsBuffer[ (j++) * this->blockHeight ];
               }
