@@ -43,8 +43,6 @@ int main(int argc, char **argv)
   std::cout << "INFO, psgl::main, reference file = " << rfile << " (in " << mode  << " format) " << std::endl;
   std::cout << "INFO, psgl::main, query file = " << qfile << std::endl;
 
-  using ScoreType = int32_t;
-
   psgl::graphLoader g;
 
   if (mode.compare("vg") == 0)
@@ -57,9 +55,9 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
+  std::vector< psgl::BestScoreInfo > bestScoreVector;
 
-  if (psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL) == PSGL_STATUS_OK)
+  if (psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL) == PSGL_STATUS_OK)
     std::cout << "INFO, psgl::main, run finished" << std::endl;
 
   psgl::printResultsToFile (ofile, bestScoreVector);

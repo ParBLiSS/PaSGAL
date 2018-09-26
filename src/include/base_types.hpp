@@ -41,35 +41,33 @@ namespace psgl
 
   /**
    * @brief                   container to save info about best score
-   * @tparam[in]  ScoreType   type to store scores in DP matrix
    */
-  template <typename ScoreType>
-    struct BestScoreInfo
+  struct BestScoreInfo
+  {
+    //coordinates in complete DP matrix where optimal alignment begins and ends (both inclusive)
+    //these are 0-based offsets
+    int32_t refColumnStart;
+    int32_t refColumnEnd;
+
+    int32_t qryRowStart;
+    int32_t qryRowEnd;
+
+    //score value
+    int32_t score;
+
+    char strand; // '+' or '-'
+
+    //TODO: Storing cigar may be expensive, consider removing later
+    std::string cigar;
+
+    /**
+     * @brief   constructor
+     */
+    BestScoreInfo()
     {
-      //coordinates in complete DP matrix where optimal alignment begins and ends (both inclusive)
-      //these are 0-based offsets
-      int32_t refColumnStart;
-      int32_t refColumnEnd;
-
-      int32_t qryRowStart;
-      int32_t qryRowEnd;
-
-      //score value
-      ScoreType score;
-
-      char strand; // '+' or '-'
-
-      //TODO: Storing cigar may be expensive, consider removing later
-      std::string cigar;
-
-      /**
-       * @brief   constructor
-       */
-      BestScoreInfo()
-      {
-        this->score = 0;
-      }
-    };
+      this->score = 0;
+    }
+  };
 }
 
 #endif

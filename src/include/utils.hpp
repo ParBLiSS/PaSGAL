@@ -133,42 +133,41 @@ namespace psgl
      * @brief                 compute alignment score from cigar string
      * @param[in]     cigar   the cigar string
      */
-    template <typename ScoreType>
-      ScoreType cigarScore (const std::string &cigar)
+    int32_t cigarScore (const std::string &cigar)
+    {
+      if (cigar.empty()) 
+        return 0;
+
+      int32_t score = 0;
+      int currentNumeric = 0;
+
+      for(int i = 0; i < cigar.length(); i++)
       {
-        if (cigar.empty()) 
-          return 0;
+        char c = cigar.at(i);
 
-        ScoreType score = 0;
-        int currentNumeric = 0;
-
-        for(int i = 0; i < cigar.length(); i++)
+        if ( isdigit(c) )
         {
-          char c = cigar.at(i);
-
-          if ( isdigit(c) )
-          {
-            currentNumeric = (currentNumeric * 10) + (c - '0');
-          }
-          else 
-          {
-            assert (c == '=' || c == 'X' || c == 'I' || c == 'D');
-
-            if ( c == '=' )
-              score += SCORE::match * currentNumeric;
-            else if ( c == 'X')
-              score += SCORE::mismatch * currentNumeric;
-            else if (c == 'I')
-              score += SCORE::ins * currentNumeric;
-            else  // c == 'D'
-              score += SCORE::del * currentNumeric;
-
-            currentNumeric = 0;
-          }
+          currentNumeric = (currentNumeric * 10) + (c - '0');
         }
+        else 
+        {
+          assert (c == '=' || c == 'X' || c == 'I' || c == 'D');
 
-        return score;
+          if ( c == '=' )
+            score += SCORE::match * currentNumeric;
+          else if ( c == 'X')
+            score += SCORE::mismatch * currentNumeric;
+          else if (c == 'I')
+            score += SCORE::ins * currentNumeric;
+          else  // c == 'D'
+            score += SCORE::del * currentNumeric;
+
+          currentNumeric = 0;
+        }
       }
+
+      return score;
+    }
   }
 
   /**

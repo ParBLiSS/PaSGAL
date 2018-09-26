@@ -30,15 +30,13 @@ TEST(localAlignmentUniformLen, multipleQuerySequentialUniformLength_vg)
   auto rfile = dir + "/BRCA1_seq_graph.vg";
   auto qfile = dir + "/BRCA1_16_uniform_len.fastq";
 
-  using ScoreType = int32_t;
-
   //load graph
 
   psgl::graphLoader g;
   g.loadFromVG(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
-  psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  std::vector< psgl::BestScoreInfo > bestScoreVector;
+  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
 
@@ -111,15 +109,13 @@ TEST(localAlignmentUniformLen, multipleQuerySequentialUniformLength_txt)
   auto rfile = dir + "/BRCA1_seq_graph.txt";
   auto qfile = dir + "/BRCA1_16_uniform_len.fastq";
 
-  using ScoreType = int32_t;
-
   //load graph
 
   psgl::graphLoader g;
   g.loadFromTxt(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
-  psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  std::vector< psgl::BestScoreInfo > bestScoreVector;
+  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
 
@@ -192,15 +188,13 @@ TEST(localAlignmentUniformLen, multipleQueryParallelUniformLength_vg)
   auto rfile = dir + "/BRCA1_seq_graph.vg";
   auto qfile = dir + "/BRCA1_16_uniform_len.fastq";
 
-  using ScoreType = int32_t;
-
   //load graph
 
   psgl::graphLoader g;
   g.loadFromVG(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
-  psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  std::vector< psgl::BestScoreInfo > bestScoreVector;
+  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
 
@@ -273,15 +267,13 @@ TEST(localAlignmentUniformLen, multipleQueryParallelUniformLength_txt)
   auto rfile = dir + "/BRCA1_seq_graph.txt";
   auto qfile = dir + "/BRCA1_16_uniform_len.fastq";
 
-  using ScoreType = int32_t;
-
   //load graph
 
   psgl::graphLoader g;
   g.loadFromTxt(rfile);
 
-  std::vector< psgl::BestScoreInfo<ScoreType> > bestScoreVector;
-  psgl::alignToDAG<ScoreType> (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  std::vector< psgl::BestScoreInfo > bestScoreVector;
+  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
 
   //NOTE: Ground truth calculated using unit scoring system
   ASSERT_EQ(bestScoreVector.size(), 16); 
