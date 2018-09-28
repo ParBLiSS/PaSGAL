@@ -27,6 +27,78 @@
 namespace psgl
 {
   /**
+   * Parameters and SIMD instructions specific for certain score type.
+   */
+
+  template<typename T> struct SimdInst {};
+
+  template<>
+    struct SimdInst<int32_t> 
+    {
+      typedef int32_t type;
+      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
+
+      static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi32(a, b); }
+      static inline __m512i set1(int32_t a) { return _mm512_set1_epi32(a); }
+      static inline __m512i set1_32(int32_t a) { return _mm512_set1_epi32(a); }
+      static inline __m512i mask_set1(const __m512i& a, __mmask16 k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
+      static inline __m512i mask_set1_32(const __m512i& a, __mmask16 k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
+      static inline __m512i blend(__mmask16 k, const __m512i& a, const __m512i& b) {return _mm512_mask_blend_epi32(k, a, b); }
+      static inline __m512i max(const __m512i& a, const __m512i& b) { return _mm512_max_epi32(a, b); }
+      static inline __mmask16 cmpeq(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi32_mask(a, b); }  
+      static inline __mmask16 cmpeq_32(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi32_mask(a, b); }  
+
+      //type oblivious operations
+      static inline __m512i zero() {return _mm512_setzero_si512(); }
+      static inline void store(void *mem_addr, const __m512i &a) { return _mm512_store_si512(mem_addr, a); }
+      static inline __m512i load(void const *mem_addr) { return _mm512_load_si512(mem_addr); }
+    };
+
+  template<>
+    struct SimdInst<int16_t> 
+    {
+      typedef int16_t type;
+      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
+
+      static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi16(a, b); }
+      static inline __m512i set1(int16_t a) { return _mm512_set1_epi16(a); }
+      static inline __m512i set1_32(int32_t a) { return _mm512_set1_epi32(a); }
+      static inline __m512i mask_set1(const __m512i& a, __mmask32 k, int16_t b) { return _mm512_mask_set1_epi16(a, k, b); } 
+      static inline __m512i mask_set1_32(const __m512i& a, __mmask16 k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
+      static inline __m512i blend(__mmask32 k, const __m512i& a, const __m512i& b) {return _mm512_mask_blend_epi16(k, a, b); }
+      static inline __m512i max(const __m512i& a, const __m512i& b) { return _mm512_max_epi16(a, b); }
+      static inline __mmask32 cmpeq(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi16_mask(a, b); }  
+      static inline __mmask16 cmpeq_32(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi32_mask(a, b); }  
+
+      //type oblivious operations
+      static inline __m512i zero() {return _mm512_setzero_si512(); }
+      static inline void store(void *mem_addr, const __m512i &a) { return _mm512_store_si512(mem_addr, a); }
+      static inline __m512i load(void const *mem_addr) { return _mm512_load_si512(mem_addr); }
+    };
+
+  template<>
+    struct SimdInst<int8_t> 
+    {
+      typedef int8_t type;
+      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
+
+      static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi8(a, b); }
+      static inline __m512i set1(int8_t a) { return _mm512_set1_epi8(a); }
+      static inline __m512i set1_32(int32_t a) { return _mm512_set1_epi32(a); }
+      static inline __m512i mask_set1(const __m512i& a, __mmask64 k, int8_t b) { return _mm512_mask_set1_epi8(a, k, b); } 
+      static inline __m512i mask_set1_32(const __m512i& a, __mmask16 k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
+      static inline __m512i blend(__mmask64 k, const __m512i& a, const __m512i& b) {return _mm512_mask_blend_epi8(k, a, b); }
+      static inline __m512i max(const __m512i& a, const __m512i& b) { return _mm512_max_epi8(a, b); }
+      static inline __mmask64 cmpeq(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi8_mask(a, b); }  
+      static inline __mmask16 cmpeq_32(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi32_mask(a, b); }  
+
+      //type oblivious operations
+      static inline __m512i zero() {return _mm512_setzero_si512(); }
+      static inline void store(void *mem_addr, const __m512i &a) { return _mm512_store_si512(mem_addr, a); }
+      static inline __m512i load(void const *mem_addr) { return _mm512_load_si512(mem_addr); }
+    };
+
+  /**
    * @brief   Supports phase 1 DP in forward direction
    */
   template <typename SIMD>
@@ -91,26 +163,54 @@ namespace psgl
           {
             assert (outputBestScoreVector.size() == readSet.size());
 
+            std::size_t countReadBatches = std::ceil (readSet.size() * 1.0 / SIMD::numSeqs);
+
+            //column location value requires int32_t type, so may need >1 register per read batch
+            constexpr size_t colValuesPerRegister = SIMD_REG_SIZE / (8 * sizeof(int32_t));
+            constexpr size_t colRegistersCountPerBatch = SIMD::numSeqs / colValuesPerRegister;
+
+            static_assert ( colRegistersCountPerBatch == 1 || 
+                            colRegistersCountPerBatch == 2 || 
+                            colRegistersCountPerBatch == 4); 
+
             // modified containers to hold best-score info
             // vector elements aligned to 64 byte boundaries
-            std::size_t countReadBatches = std::ceil (readSet.size() * 1.0 / SIMD::numSeqs);
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreVector (countReadBatches);
-            std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreColVector (countReadBatches);
+            std::vector <__m512i, aligned_allocator<__m512i, 64> > 
+                  _bestScoreColVector (countReadBatches * colRegistersCountPerBatch);
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreRowVector (countReadBatches);
 
             // execute the alignment routine
             this->alignToDAGLocal_Phase1_vectorized (_bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
 
+            //when debugging for low-precision
+#ifdef DEBUG
+            for (auto &e : _bestScoreVector)
+              simdUtils::print_avx_num16 (e);
+
+            for (auto &e : _bestScoreColVector)
+              simdUtils::print_avx_num32 (e);
+
+            for (auto &e : _bestScoreRowVector)
+              simdUtils::print_avx_num16 (e);
+#endif
+
+
             //parse best scores from vector registers
             std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeScores (SIMD::numSeqs);
-            std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeCols   (SIMD::numSeqs);
             std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeRows   (SIMD::numSeqs);
+            std::vector<int32_t,             aligned_allocator<int32_t,             64> > storeCols   (SIMD::numSeqs);
 
             for (size_t i = 0; i < countReadBatches; i++)
             {
               SIMD::store (storeScores.data(), _bestScoreVector[i]);
-              SIMD::store (storeCols.data(), _bestScoreColVector[i]);
               SIMD::store (storeRows.data(), _bestScoreRowVector[i]);
+
+              for (size_t j = 0; j < colRegistersCountPerBatch; j++) 
+              {
+                SIMD::store ( &storeCols [j*colValuesPerRegister], 
+                              _bestScoreColVector[i * colRegistersCountPerBatch + j]);
+              }
 
               for (size_t j = 0; j < SIMD::numSeqs; j++)
               {
@@ -123,7 +223,7 @@ namespace psgl
                   outputBestScoreVector[originalReadId].qryRowEnd     = storeRows[j];
 
 #ifdef DEBUG
-                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << storeScores[j] << "\n";
+                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << storeScores[j] << ", qryRowEnd = " << storeRows[j] << ", refColumnEnd = " << storeCols[j] << "\n";
 #endif
                 }
               }
@@ -240,9 +340,17 @@ namespace psgl
             std::size_t readCount = readSet.size();
             std::size_t countReadBatches = std::ceil (readCount * 1.0 / SIMD::numSeqs);
 
+            //column location value requires int32_t type, so may need >1 register per read batch
+            constexpr size_t colValuesPerRegister = SIMD_REG_SIZE / (8 * sizeof(int32_t));
+            constexpr size_t colRegistersCountPerBatch = SIMD::numSeqs / colValuesPerRegister;
+
+            static_assert ( colRegistersCountPerBatch == 1 || 
+                            colRegistersCountPerBatch == 2 || 
+                            colRegistersCountPerBatch == 4); 
+
             //few checks
             assert (bestScores.size() == countReadBatches);
-            assert (bestCols.size() == countReadBatches);
+            assert (bestCols.size() == countReadBatches * colRegistersCountPerBatch);
             assert (bestRows.size() == countReadBatches);
 
 #ifdef VTUNE_SUPPORT
@@ -318,7 +426,12 @@ namespace psgl
               {
                 __m512i bestScores512 = SIMD::zero();
                 __m512i bestRows512   = SIMD::zero();
-                __m512i bestCols512   = SIMD::zero();
+
+                //we may need at most 4 registers to save column for each batch (depending on SIMD::type)
+                __m512i bestCols512_0   = SIMD::zero();
+                __m512i bestCols512_1   = SIMD::zero();
+                __m512i bestCols512_2   = SIMD::zero();
+                __m512i bestCols512_3   = SIMD::zero();
 
                 //reset DP 'lastBatchRow' buffer
                 std::fill (lastBatchRowBuffer.begin(), lastBatchRowBuffer.end(), SIMD::zero());
@@ -411,7 +524,6 @@ namespace psgl
 
                           currentMax512 = SIMD::max (currentMax512, substEdit); 
                           currentMax512 = SIMD::max (currentMax512, delEdit); 
-
                         }
 
                         //insertion edit
@@ -427,7 +539,24 @@ namespace psgl
 
                       //update row and column values accordingly
                       bestRows512 = SIMD::mask_set1 (bestRows512, updated, (typename SIMD::type) (j + l));
-                      bestCols512 = SIMD::mask_set1 (bestCols512, updated, (typename SIMD::type) k);
+
+                      if (colRegistersCountPerBatch == 1)
+                      {
+                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
+                      }
+                      else if (colRegistersCountPerBatch == 2)
+                      {
+                        //lowest significant bits in 'updated' correspond to first set of reads
+                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated ,  (int32_t) k);
+                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
+                      }
+                      else if (colRegistersCountPerBatch == 4)
+                      {
+                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated ,  (int32_t) k);
+                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
+                        bestCols512_2 = SIMD::mask_set1_32 (bestCols512_2, updated >> 2*colValuesPerRegister,  (int32_t) k);
+                        bestCols512_3 = SIMD::mask_set1_32 (bestCols512_3, updated >> 3*colValuesPerRegister,  (int32_t) k);
+                      }
 
                       //save current score in small buffer
                       nearbyColumns[k & (blockWidth-1)][l] = currentMax512;
@@ -445,7 +574,25 @@ namespace psgl
 
                 bestScores[i] = bestScores512;
                 bestRows[i]   = bestRows512; 
-                bestCols[i]   = bestCols512; 
+                {
+                  //storing best columns requires extra work
+                  if (colRegistersCountPerBatch == 1)
+                  {
+                    bestCols[1*i + 0]   = bestCols512_0; 
+                  }
+                  else if (colRegistersCountPerBatch == 2)
+                  {
+                    bestCols[2*i + 0]   = bestCols512_0;
+                    bestCols[2*i + 1]   = bestCols512_1;
+                  }
+                  else if (colRegistersCountPerBatch == 4)
+                  {
+                    bestCols[4*i + 0]   = bestCols512_0;
+                    bestCols[4*i + 1]   = bestCols512_1;
+                    bestCols[4*i + 2]   = bestCols512_2;
+                    bestCols[4*i + 3]   = bestCols512_3;
+                  }
+                }
 
               } // all reads done
 
@@ -526,25 +673,52 @@ namespace psgl
           {
             assert (outputBestScoreVector.size() == readSet.size());
 
+            std::size_t countReadBatches = std::ceil (readSet.size() * 1.0 / SIMD::numSeqs);
+
+            //column location value requires int32_t type, so may need >1 register per read batch
+            constexpr size_t colValuesPerRegister = SIMD_REG_SIZE / (8 * sizeof(int32_t));
+            constexpr size_t colRegistersCountPerBatch = SIMD::numSeqs / colValuesPerRegister;
+
+            static_assert ( colRegistersCountPerBatch == 1 || 
+                            colRegistersCountPerBatch == 2 || 
+                            colRegistersCountPerBatch == 4); 
+
             // modified containers to hold best-score info
             // vector elements aligned to 64 byte boundaries
-            std::size_t countReadBatches = std::ceil (readSet.size() * 1.0 / SIMD::numSeqs);
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreVector (countReadBatches);
-            std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreColVector (countReadBatches);
             std::vector <__m512i, aligned_allocator<__m512i, 64> > _bestScoreRowVector (countReadBatches);
+            std::vector <__m512i, aligned_allocator<__m512i, 64> > 
+                  _bestScoreColVector (countReadBatches * colRegistersCountPerBatch);
 
             this->alignToDAGLocal_Phase1_rev_vectorized (outputBestScoreVector, _bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
 
+            //when debugging for low-precision
+#ifdef DEBUG
+            for (auto &e : _bestScoreVector)
+              simdUtils::print_avx_num16 (e);
+
+            for (auto &e : _bestScoreColVector)
+              simdUtils::print_avx_num32 (e);
+
+            for (auto &e : _bestScoreRowVector)
+              simdUtils::print_avx_num16 (e);
+#endif
+
             //parse best scores from vector registers
             std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeScores (SIMD::numSeqs);
-            std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeCols   (SIMD::numSeqs);
             std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeRows   (SIMD::numSeqs);
+            std::vector<int32_t,             aligned_allocator<int32_t,             64> > storeCols   (SIMD::numSeqs);
 
             for (size_t i = 0; i < countReadBatches; i++)
             {
               SIMD::store (storeScores.data(), _bestScoreVector[i]);
-              SIMD::store (storeCols.data(), _bestScoreColVector[i]);
               SIMD::store (storeRows.data(), _bestScoreRowVector[i]);
+
+              for (size_t j = 0; j < colRegistersCountPerBatch; j++) 
+              {
+                SIMD::store (&storeCols [j*colValuesPerRegister], 
+                            _bestScoreColVector[i * colRegistersCountPerBatch + j]);
+              }
 
               for (size_t j = 0; j < SIMD::numSeqs; j++)
               {
@@ -552,14 +726,14 @@ namespace psgl
                 {
                   auto originalReadId = sortedReadOrder[i * SIMD::numSeqs + j];
 
-                  assert (outputBestScoreVector[originalReadId].score == storeScores[j] - 1);  //offset by 1
-
-                  outputBestScoreVector[originalReadId].refColumnStart  = storeCols[j];
-                  outputBestScoreVector[originalReadId].qryRowStart     = readSet[originalReadId].length() - 1 - storeRows[j];;
-
 #ifdef DEBUG
-                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_rev_vectorized_wrapper, read # " << originalReadId << ",  score = " << storeScores[j] << "\n";
+                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_rev_vectorized_wrapper, read # " << originalReadId << ",  score = " << storeScores[j] << ", refColumnStart = " << storeCols[j] << ", qryRowStart = " << readSet[originalReadId].length() - 1 - storeRows[j] << "\n";
 #endif
+
+                  assert (outputBestScoreVector[originalReadId].score == storeScores[j] - 1);  //offset by 1
+                  outputBestScoreVector[originalReadId].refColumnStart  = storeCols[j];
+                  outputBestScoreVector[originalReadId].qryRowStart     = readSet[originalReadId].length() - 1 - storeRows[j];
+
                 }
               }
             }
@@ -678,10 +852,18 @@ namespace psgl
             std::size_t readCount = readSet.size();
             std::size_t countReadBatches = std::ceil (readCount * 1.0 / SIMD::numSeqs);
 
+            //column location value requires int32_t type, so may need >1 register per read batch
+            constexpr size_t colValuesPerRegister = SIMD_REG_SIZE / (8 * sizeof(int32_t));
+            constexpr size_t colRegistersCountPerBatch = SIMD::numSeqs / colValuesPerRegister;
+
+            static_assert ( colRegistersCountPerBatch == 1 || 
+                            colRegistersCountPerBatch == 2 || 
+                            colRegistersCountPerBatch == 4); 
+
             //few checks
             assert (bestScores.size() == countReadBatches);
-            assert (bestCols.size() == countReadBatches);
-            assert (bestRows.size() == countReadBatches);
+            assert (bestRows.size()   == countReadBatches);
+            assert (bestCols.size()   == countReadBatches * colRegistersCountPerBatch);
 
 //#ifdef VTUNE_SUPPORT
             //__itt_resume();
@@ -748,19 +930,25 @@ namespace psgl
               }
 
               //buffer to save read charactes for innermost loop
-              std::vector<int32_t, aligned_allocator<int32_t, 64> > readCharsInt (SIMD::numSeqs * this->blockHeight);
+              std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > readCharsInt (SIMD::numSeqs * this->blockHeight);
 
               //process SIMD::numSeqs reads in a single iteration
 #pragma omp for schedule(dynamic) nowait
               for (size_t i = 0; i < countReadBatches; i++)
               {
-                __m512i fwdBestCols512;
+                //first parse alignment locations of forward DP
                 __m512i fwdBestRows512;
 
-                //parse alignment locations of forward DP
+                //we may need at most 4 registers to save fwd col values
+                __m512i fwdBestCols512_0;
+                __m512i fwdBestCols512_1;
+                __m512i fwdBestCols512_2;
+                __m512i fwdBestCols512_3;
+
+                //begin reading fwd DP results
                 {
-                  std::vector<int32_t, aligned_allocator<int32_t, 64> > fwdBestCols   (SIMD::numSeqs);
-                  std::vector<int32_t, aligned_allocator<int32_t, 64> > fwdBestRows   (SIMD::numSeqs);
+                  std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > fwdBestRows (SIMD::numSeqs);
+                  std::vector<int32_t, aligned_allocator<int32_t, 64> > fwdBestCols (SIMD::numSeqs);
 
                   for (size_t j = 0; j < SIMD::numSeqs; j++)
                   {
@@ -772,13 +960,31 @@ namespace psgl
                     }
                   }
 
-                  fwdBestCols512 = SIMD::load ( fwdBestCols.data() );
                   fwdBestRows512 = SIMD::load ( fwdBestRows.data() );
+
+                  {
+                    fwdBestCols512_0   = SIMD::load (&fwdBestCols [0] ); 
+
+                    //storing best columns requires extra work
+                    if (colRegistersCountPerBatch >= 2)
+                      fwdBestCols512_1   = SIMD::load (&fwdBestCols [1*colValuesPerRegister]); 
+
+                    if (colRegistersCountPerBatch == 4)
+                    {
+                      fwdBestCols512_2   = SIMD::load (&fwdBestCols [2*colValuesPerRegister]); 
+                      fwdBestCols512_3   = SIMD::load (&fwdBestCols [3*colValuesPerRegister]); 
+                    }
+                  }
                 }
 
                 __m512i bestScores512 = SIMD::zero();
                 __m512i bestRows512   = SIMD::zero();
-                __m512i bestCols512   = SIMD::zero();
+
+                //we may need at most 4 registers to save column for each batch (depending on SIMD::type)
+                __m512i bestCols512_0   = SIMD::zero();
+                __m512i bestCols512_1   = SIMD::zero();
+                __m512i bestCols512_2   = SIMD::zero();
+                __m512i bestCols512_3   = SIMD::zero();
 
                 //reset DP 'lastBatchRow' buffer
                 std::fill (lastBatchRowBuffer.begin(), lastBatchRowBuffer.end(), SIMD::zero() );
@@ -886,14 +1092,60 @@ namespace psgl
 
                       //update row and column values accordingly
                       bestRows512 = SIMD::mask_set1 (bestRows512, updated, (typename SIMD::type) (j + l));
-                      bestCols512 = SIMD::mask_set1 (bestCols512, updated, (typename SIMD::type) k);
 
-                      //detect and update score of the optimal alignment we want
+                      if (colRegistersCountPerBatch == 1)
+                      {
+                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
+                      }
+                      else if (colRegistersCountPerBatch == 2)
+                      {
+                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
+                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
+                      }
+                      else if (colRegistersCountPerBatch == 4)
+                      {
+                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
+                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
+                        bestCols512_2 = SIMD::mask_set1_32 (bestCols512_2, updated >> 2*colValuesPerRegister,  (int32_t) k);
+                        bestCols512_3 = SIMD::mask_set1_32 (bestCols512_3, updated >> 3*colValuesPerRegister,  (int32_t) k);
+                      }
+
+                      //detect and manipulate the score of the specific optimal alignment we want
+                      //this is required to make sure reverse DP reports same alignment as fwd DP
                       {
                         __m512i currentRow = SIMD::set1 ( (typename SIMD::type) (j + l));
-                        __m512i currentCol = SIMD::set1 ( (typename SIMD::type) k ); 
+                        __m512i currentCol = SIMD::set1_32 ( (int32_t) k ); 
                         
-                        auto compareCell = SIMD::cmpeq (fwdBestRows512, currentRow) & SIMD::cmpeq (fwdBestCols512, currentCol);
+                        auto compareCell = SIMD::cmpeq (fwdBestRows512, currentRow);
+
+                        if (colRegistersCountPerBatch == 1)
+                        {
+                          auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
+                          compareCell = compareCell & 
+                            ( compareCellByCol_0 << 0*colValuesPerRegister);
+                        }
+                        else if (colRegistersCountPerBatch == 2)
+                        {
+                          auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
+                          auto compareCellByCol_1 = SIMD::cmpeq_32 (fwdBestCols512_1, currentCol);
+
+                          compareCell = compareCell & 
+                            ( compareCellByCol_0 << 0*colValuesPerRegister | 
+                              compareCellByCol_1 << 1*colValuesPerRegister);
+                        }
+                        else if (colRegistersCountPerBatch == 4)
+                        {
+                          auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
+                          auto compareCellByCol_1 = SIMD::cmpeq_32 (fwdBestCols512_1, currentCol);
+                          auto compareCellByCol_2 = SIMD::cmpeq_32 (fwdBestCols512_2, currentCol);
+                          auto compareCellByCol_3 = SIMD::cmpeq_32 (fwdBestCols512_3, currentCol);
+
+                          compareCell = compareCell & 
+                            ( compareCellByCol_0 << 0*colValuesPerRegister | 
+                              compareCellByCol_1 << 1*colValuesPerRegister |
+                              compareCellByCol_2 << 2*colValuesPerRegister |
+                              compareCellByCol_3 << 3*colValuesPerRegister);
+                        }
 
                         currentMax512 = SIMD::mask_set1 (currentMax512, compareCell, (typename SIMD::type) (SCORE::match + 1)); 
                       }
@@ -914,8 +1166,25 @@ namespace psgl
 
                 bestScores[i] = bestScores512;
                 bestRows[i]   = bestRows512; 
-                bestCols[i]   = bestCols512; 
-
+                {
+                  //storing best columns requires extra work
+                  if (colRegistersCountPerBatch == 1)
+                  {
+                    bestCols[1*i + 0]   = bestCols512_0; 
+                  }
+                  else if (colRegistersCountPerBatch == 2)
+                  {
+                    bestCols[2*i + 0]   = bestCols512_0;
+                    bestCols[2*i + 1]   = bestCols512_1;
+                  }
+                  else if (colRegistersCountPerBatch == 4)
+                  {
+                    bestCols[4*i + 0]   = bestCols512_0;
+                    bestCols[4*i + 1]   = bestCols512_1;
+                    bestCols[4*i + 2]   = bestCols512_2;
+                    bestCols[4*i + 3]   = bestCols512_3;
+                  }
+                }
               } // all reads done
 
               threadTimings[omp_get_thread_num()] = omp_get_wtime() - threadTimings[omp_get_thread_num()];
@@ -928,69 +1197,6 @@ namespace psgl
             //__itt_pause();
 //#endif
           }
-    };
-
-  /**
-   * Parameters and SIMD instructions specific for certain score type.
-   */
-
-  template<typename T> struct SimdInst {};
-
-  template<>
-    struct SimdInst<int32_t> 
-    {
-      typedef int32_t type;
-      static const int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
-
-      static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi32(a, b); }
-      static inline __m512i set1(int32_t a) { return _mm512_set1_epi32(a); }
-      static inline __m512i mask_set1(const __m512i& a, __mmask16 k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
-      static inline __m512i blend(__mmask16 k, const __m512i& a, const __m512i& b) {return _mm512_mask_blend_epi32(k, a, b); }
-      static inline __m512i max(const __m512i& a, const __m512i& b) { return _mm512_max_epi32(a, b); }
-      static inline __mmask16 cmpeq(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi32_mask(a, b); }  
-
-      //type oblivious operations
-      static inline __m512i zero() {return _mm512_setzero_si512(); }
-      static inline void store(void *mem_addr, const __m512i &a) { return _mm512_store_si512(mem_addr, a); }
-      static inline __m512i load(void const *mem_addr) { return _mm512_load_si512(mem_addr); }
-    };
-
-  template<>
-    struct SimdInst<int16_t> 
-    {
-      typedef int16_t type;
-      static const int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
-
-      static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi16(a, b); }
-      static inline __m512i set1(int16_t a) { return _mm512_set1_epi16(a); }
-      static inline __m512i mask_set1(const __m512i& a, __mmask32 k, int16_t b) { return _mm512_mask_set1_epi16(a, k, b); } 
-      static inline __m512i blend(__mmask32 k, const __m512i& a, const __m512i& b) {return _mm512_mask_blend_epi16(k, a, b); }
-      static inline __m512i max(const __m512i& a, const __m512i& b) { return _mm512_max_epi16(a, b); }
-      static inline __mmask32 cmpeq(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi16_mask(a, b); }  
-
-      //type oblivious operations
-      static inline __m512i zero() {return _mm512_setzero_si512(); }
-      static inline void store(void *mem_addr, const __m512i &a) { return _mm512_store_si512(mem_addr, a); }
-      static inline __m512i load(void const *mem_addr) { return _mm512_load_si512(mem_addr); }
-    };
-
-  template<>
-    struct SimdInst<int8_t> 
-    {
-      typedef int8_t type;
-      static const int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
-
-      static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi8(a, b); }
-      static inline __m512i set1(int8_t a) { return _mm512_set1_epi8(a); }
-      static inline __m512i mask_set1(const __m512i& a, __mmask64 k, int8_t b) { return _mm512_mask_set1_epi8(a, k, b); } 
-      static inline __m512i blend(__mmask64 k, const __m512i& a, const __m512i& b) {return _mm512_mask_blend_epi8(k, a, b); }
-      static inline __m512i max(const __m512i& a, const __m512i& b) { return _mm512_max_epi8(a, b); }
-      static inline __mmask64 cmpeq(const __m512i& a, const __m512i& b) { return _mm512_cmpeq_epi8_mask(a, b); }  
-
-      //type oblivious operations
-      static inline __m512i zero() {return _mm512_setzero_si512(); }
-      static inline void store(void *mem_addr, const __m512i &a) { return _mm512_store_si512(mem_addr, a); }
-      static inline __m512i load(void const *mem_addr) { return _mm512_load_si512(mem_addr); }
     };
 }
 

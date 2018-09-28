@@ -14,6 +14,7 @@
 #include <chrono>
 #include <fstream>
 #include <omp.h>
+#include <immintrin.h>
 
 #include "base_types.hpp"
 
@@ -167,6 +168,38 @@ namespace psgl
       }
 
       return score;
+    }
+  }
+
+  namespace simdUtils
+  {
+    /*
+     * @brief   prints AVX512 register as int32_t values
+     */
+    void print_avx_num32(const __m512i &var)
+    {
+      int32_t *val = (int32_t*) &var;
+
+      printf("Numerical: %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i \n", 
+          val[0],  val[1],  val[2],  val[3], val[4],  val[5], 
+          val[6],  val[7],  val[8],  val[9], val[10], val[11],
+          val[12], val[13], val[14], val[15]);
+    }
+
+    /*
+     * @brief   prints AVX512 register as int16_t values
+     */
+    void print_avx_num16(const __m512i &var)
+    {
+      int16_t *val = (int16_t*) &var;
+
+      printf("Numerical: %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i \n", 
+          val[0],  val[1],  val[2],  val[3],  val[4],  val[5], 
+          val[6],  val[7],  val[8],  val[9],  val[10], val[11],
+          val[12], val[13], val[14], val[15], val[16], val[17],
+          val[18], val[19], val[20], val[21], val[22], val[23],
+          val[24], val[25], val[26], val[27], val[28], val[29],
+          val[30], val[31]);
     }
   }
 

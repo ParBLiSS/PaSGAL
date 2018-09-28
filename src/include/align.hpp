@@ -536,6 +536,16 @@ namespace psgl
         << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << std::endl;
     }
 
+#ifdef DEBUG
+    {
+      for (size_t readno = 0; readno < readSet_P1.size(); readno++)
+      {
+        std::cout << "INFO, psgl::alignToDAGLocal, read # " << readno + 1 << ", score = " << bestScoreVector_P1[readno].score 
+          << ", refColumnEnd = " << bestScoreVector_P1[readno].refColumnEnd
+          << ", qryRowEnd = " << bestScoreVector_P1[readno].qryRowEnd << "\n";
+      }
+    }
+#endif
 
     //
     // Phase 1 - reverse [get begin locations]
