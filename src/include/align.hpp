@@ -502,14 +502,15 @@ namespace psgl
     assert (readSet.size() > 0);
     assert (outputBestScoreVector.empty());
 
-    //TODO: Dynamically decide the SIMD word type
-    typedef SimdInst<int32_t> SIMD;
+
 
     //
     // Phase 1 [get best score values and locations]
     //
     {
       auto tick1 = __rdtsc();
+
+      size_t maxReadLength = 0;
 
       for (size_t readno = 0; readno < readSet.size(); readno++)
       {
@@ -518,6 +519,9 @@ namespace psgl
 
         readSet_P1.push_back (readSet[readno]);
         readSet_P1.push_back (read_reverse);
+
+        if (readSet[readno].length() > maxReadLength)
+          maxReadLength = readSet[readno].length();
       }
 
       assert (bestScoreVector_P1.size() == 2 * readSet.size() );
@@ -525,8 +529,28 @@ namespace psgl
 
       //align read to ref.
 #ifdef __AVX512BW__
-      Phase1_Vectorized<SIMD> obj (readSet_P1, graph); 
-      obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
+
+      //there would be few padded characters at the end of qry seq
+      //take that into account when computing max. read length
+      auto blockHeight = Phase1_Vectorized< SimdInst<int8_t> >::blockHeight;
+      maxReadLength += blockHeight - 1 - (maxReadLength - 1) % blockHeight; 
+
+      //decide precision by looking at maximum score possible
+      if (maxReadLength * SCORE::match <= INT8_MAX) 
+      {
+        Phase1_Vectorized< SimdInst<int8_t> > obj (readSet_P1, graph); 
+        obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
+      }
+      else if (maxReadLength * SCORE::match <= INT16_MAX) 
+      {
+        Phase1_Vectorized< SimdInst<int16_t> > obj (readSet_P1, graph); 
+        obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
+      }
+      else 
+      {
+        Phase1_Vectorized< SimdInst<int32_t> > obj (readSet_P1, graph); 
+        obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
+      }
 #else
       alignToDAGLocal_Phase1_scalar (readSet_P1, graph, bestScoreVector_P1);
 #endif
@@ -555,6 +579,8 @@ namespace psgl
 
       std::vector<std::string> readSet_P1_R;
 
+      size_t maxReadLength = 0;
+
       for (size_t readno = 0; readno < readSet.size(); readno++)
       {
         if (bestScoreVector_P1[2 * readno].score > bestScoreVector_P1[2 * readno + 1].score)
@@ -575,6 +601,9 @@ namespace psgl
           psgl::seqUtils::reverse( readSet_P1[2 * readno + 1], read_reverse); 
           readSet_P1_R.push_back (read_reverse);
         }
+
+        if (readSet[readno].length() > maxReadLength)
+          maxReadLength = readSet[readno].length();
       }
 
       assert (outputBestScoreVector.size() == readSet.size() );
@@ -582,8 +611,30 @@ namespace psgl
 
       //align reverse read to ref.
 #ifdef __AVX512BW__
-      Phase1_Rev_Vectorized<SIMD> obj (readSet_P1_R, graph); 
-      obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
+
+      //there would be few padded characters at the end of qry seq
+      //take that into account when computing max. read length
+      auto blockHeight = Phase1_Rev_Vectorized< SimdInst<int8_t> >::blockHeight;
+      maxReadLength += blockHeight - 1 - (maxReadLength - 1) % blockHeight; 
+
+      //decide precision by looking at maximum score possible
+      //offset by 1 because we augment the score by 1 during rev. DP
+      if (maxReadLength * SCORE::match <= INT8_MAX - 1) 
+      {
+        Phase1_Rev_Vectorized< SimdInst<int8_t> > obj (readSet_P1_R, graph); 
+        obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
+      }
+      else if (maxReadLength * SCORE::match <= INT16_MAX - 1) 
+      {
+        Phase1_Rev_Vectorized< SimdInst<int16_t> > obj (readSet_P1_R, graph); 
+        obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
+      }
+      else 
+      {
+        Phase1_Rev_Vectorized< SimdInst<int32_t> > obj (readSet_P1_R, graph); 
+        obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
+      }
+
 #else
       alignToDAGLocal_Phase1_rev_scalar (readSet_P1_R, graph, outputBestScoreVector);
 #endif

@@ -117,7 +117,7 @@ namespace psgl
         std::vector<char> readSetSOA;
 
         //cumulative read batch sizes
-        std::vector<size_t>  readSetSOAPrefixSum;
+        std::vector<size_t> readSetSOAPrefixSum;
 
         //input reads
         const std::vector<std::string> &readSet;
@@ -600,7 +600,10 @@ namespace psgl
 
             } //end of omp parallel
 
-            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_vectorized, individual thread timings (s) : " << printStats(threadTimings) << "\n"; 
+            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_vectorized" 
+                      << " (precision= " << sizeof(typename SIMD::type) << " bytes)" 
+                      << ", individual thread timings (s) : " 
+                      << printStats(threadTimings) << "\n"; 
 
 #ifdef VTUNE_SUPPORT
             __itt_pause();
@@ -638,6 +641,8 @@ namespace psgl
         //sorted permutation order of input reads
         std::vector<size_t> sortedReadOrder;
 
+      public:
+
         //small temporary storage buffer for DP scores
         //should be a power of 2
         static constexpr size_t blockWidth = Phase1_Vectorized<SIMD>::blockWidth; 
@@ -645,8 +650,6 @@ namespace psgl
         //process these many vertical cells in a go
         //should be a power of 2
         static constexpr size_t blockHeight = Phase1_Vectorized<SIMD>::blockHeight;   
-
-      public:
 
         /**
          * @brief                   public constructor
@@ -1191,7 +1194,10 @@ namespace psgl
 
             } //end of omp parallel
 
-            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_Rev_Vectorized, individual thread timings (s) : " << printStats(threadTimings) << "\n"; 
+            std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_rev_vectorized" 
+                      << " (precision= " << sizeof(typename SIMD::type) << " bytes)" 
+                      << ", individual thread timings (s) : " 
+                      << printStats(threadTimings) << "\n"; 
 
 //#ifdef VTUNE_SUPPORT
             //__itt_pause();
