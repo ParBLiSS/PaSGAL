@@ -370,23 +370,23 @@ namespace psgl
 
             std::vector<double> threadTimings (omp_get_max_threads(), 0);
 
+            //copy graph as function variable for faster access
+            const CSR_char_container graphLocal = this->graph;
+            const std::vector<bool> withLongHopLocal = withLongHop;
+
 #pragma omp parallel
             {
 #pragma omp barrier
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
 
-              //create local copy of graph for faster access
-              const CSR_char_container graphLocal = this->graph;
-              const std::vector<bool> withLongHopLocal = withLongHop;
-
               //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
-              //buffer to save selected columns (associated with long hops) of DP matrix
+              //2D buffer to save selected columns (associated with long hops) of DP matrix
               std::size_t countLongHops = std::count (withLongHopLocal.begin(), withLongHopLocal.end(), true);
               AlignedVecType fartherColumnsBuffer (countLongHops * this->blockHeight);
 
-              //for convenient access to 2D buffer
+              //pointer array for convenient data access in 2D buffer
               std::vector<__m512i*> fartherColumns(graphLocal.numVertices);
               {
                 size_t j = 0;
@@ -885,23 +885,23 @@ namespace psgl
 
             std::vector<double> threadTimings (omp_get_max_threads(), 0);
 
+            //copy graph as function variable for faster access
+            const CSR_char_container graphLocal = this->graph;
+            const std::vector<bool> withLongHopLocal = withLongHop;
+
 #pragma omp parallel
             {
 #pragma omp barrier
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
 
-              //create local copy of graph for faster access
-              const CSR_char_container graphLocal = this->graph;
-              const std::vector<bool> withLongHopLocal = withLongHop;
-
               //type def. for memory-aligned vector allocation for SIMD instructions
               using AlignedVecType = std::vector <__m512i, aligned_allocator<__m512i, 64> >;
 
-              //buffer to save selected columns (associated with long hops) of DP matrix
+              //2D buffer to save selected columns (associated with long hops) of DP matrix
               std::size_t countLongHops = std::count (withLongHopLocal.begin(), withLongHopLocal.end(), true);
               AlignedVecType fartherColumnsBuffer (countLongHops * this->blockHeight);
 
-              //for convenient access to 2D buffer
+              //pointer array for convenient data access in 2D buffer
               std::vector<__m512i*> fartherColumns(graphLocal.numVertices);
               {
                 size_t j = 0;
