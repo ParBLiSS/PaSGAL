@@ -250,8 +250,8 @@ namespace psgl
   {
     assert (bestScoreVector.size() == readSet.size());
 
-    //not using more than 24 threads
-    int maxThreadCount = omp_get_max_threads() <= 24 ? omp_get_max_threads() : 24;
+    //not using more than 48 threads
+    int maxThreadCount = omp_get_max_threads() <= 48 ? omp_get_max_threads() : 48;
 
     std::vector<double> threadTimings (maxThreadCount, 0);
 
