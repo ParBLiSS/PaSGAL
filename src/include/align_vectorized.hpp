@@ -36,6 +36,7 @@ namespace psgl
     struct SimdInst<int32_t> 
     {
       typedef int32_t type;
+      typedef __mmask16 maskType;
       static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
 
       static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi32(a, b); }
@@ -58,6 +59,7 @@ namespace psgl
     struct SimdInst<int16_t> 
     {
       typedef int16_t type;
+      typedef __mmask32 maskType;
       static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
 
       static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi16(a, b); }
@@ -80,6 +82,7 @@ namespace psgl
     struct SimdInst<int8_t> 
     {
       typedef int8_t type;
+      typedef __mmask64 maskType;
       static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
 
       static inline __m512i add(const __m512i& a, const __m512i& b) { return _mm512_add_epi8(a, b); }
@@ -1125,7 +1128,7 @@ namespace psgl
                         {
                           auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
                           compareCell = compareCell & 
-                            ( compareCellByCol_0 << 0*colValuesPerRegister);
+                            ( ((typename SIMD::maskType) compareCellByCol_0) << 0*colValuesPerRegister);
                         }
                         else if (colRegistersCountPerBatch == 2)
                         {
@@ -1133,8 +1136,8 @@ namespace psgl
                           auto compareCellByCol_1 = SIMD::cmpeq_32 (fwdBestCols512_1, currentCol);
 
                           compareCell = compareCell & 
-                            ( compareCellByCol_0 << 0*colValuesPerRegister | 
-                              compareCellByCol_1 << 1*colValuesPerRegister);
+                            ( ((typename SIMD::maskType) compareCellByCol_0) << 0*colValuesPerRegister | 
+                              ((typename SIMD::maskType) compareCellByCol_1) << 1*colValuesPerRegister);
                         }
                         else if (colRegistersCountPerBatch == 4)
                         {
@@ -1144,10 +1147,10 @@ namespace psgl
                           auto compareCellByCol_3 = SIMD::cmpeq_32 (fwdBestCols512_3, currentCol);
 
                           compareCell = compareCell & 
-                            ( compareCellByCol_0 << 0*colValuesPerRegister | 
-                              compareCellByCol_1 << 1*colValuesPerRegister |
-                              compareCellByCol_2 << 2*colValuesPerRegister |
-                              compareCellByCol_3 << 3*colValuesPerRegister);
+                            ( ((typename SIMD::maskType) compareCellByCol_0) << 0*colValuesPerRegister | 
+                              ((typename SIMD::maskType) compareCellByCol_1) << 1*colValuesPerRegister |
+                              ((typename SIMD::maskType) compareCellByCol_2) << 2*colValuesPerRegister |
+                              ((typename SIMD::maskType) compareCellByCol_3) << 3*colValuesPerRegister);
                         }
 
                         currentMax512 = SIMD::mask_set1 (currentMax512, compareCell, (typename SIMD::type) (SCORE::match + 1)); 
