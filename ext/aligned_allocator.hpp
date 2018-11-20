@@ -1,5 +1,5 @@
 /**
- * Author : Don (ttps://gist.github.com/donny-dont)
+ * Author : Don (https://gist.github.com/donny-dont)
  * Source code downloaded from: https://gist.github.com/donny-dont/1471329
  * Purpose: custom allocation of STL vector for storing SIMD register object
  */

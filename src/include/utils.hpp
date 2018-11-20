@@ -250,16 +250,18 @@ namespace psgl
     }
 
     {
-      std::cout << "AVX512 support";
-#ifdef __AVX512BW__
-      std::cout << "\t\t\tON \n";
+      std::cout << "AVX SIMD support";
+#ifdef PASGAL_ENABLE_AVX512
+      std::cout << "\t\tON (AVX512) \n";
+#elif PASGAL_ENABLE_AVX2
+      std::cout << "\t\tON (AVX2) \n";
 #else
-      std::cout << "\t\t\tOFF\n";
+      std::cout << "\t\tOFF\n";
 #endif
     }
 
     {
-      std::cout << "VTUNE support";
+      std::cout << "VTUNE profiling";
 #ifdef VTUNE_SUPPORT
       std::cout << "\t\t\tON \n";
 #else

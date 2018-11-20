@@ -1,15 +1,11 @@
-cmake_minimum_required(VERSION 2.6)
-
-# compile using intel compiler 
-# users can remove these two lines to compile with gcc
-set(CMAKE_CXX_COMPILER "icpc")
-set(CMAKE_C_COMPILER "icc")
+cmake_minimum_required(VERSION 3.1)
+include(CheckCXXCompilerFlag)
 
 # project settings
 project(PaSGAL)
 
 ##### General Compilation Settings
-set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS} --std=c++11 -fopenmp")
+set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS} --std=c++11")
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
@@ -29,13 +25,69 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib CACHE PATH "Output directory f
 OPTION(ENABLE_VTUNE "Turn on/off the vtune support with intel compiler" OFF)
 # Check if the user want to build google test applications
 OPTION(BUILD_TESTS "Inform whether test applications should be built" OFF)
-# Add AVX512 support
-option(BUILD_AVX512 "Support AVX512" ON)
 
-#compiler flag to enable AVX512 simd instructions
-if (BUILD_AVX512)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xCORE-AVX512")
-endif (BUILD_AVX512)
+SET(SIMD_SUPPORT avx512 CACHE STRING "Choose SIMD instrinsics, options are: avx512 avx2 none")
+SET_PROPERTY(CACHE SIMD_SUPPORT PROPERTY STRINGS avx512 avx2 none)
+
+#User expected to provide the SIMD option
+if (SIMD_SUPPORT STREQUAL avx2 OR SIMD_SUPPORT STREQUAL avx512)
+  # Check if compiler supports AVX
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    check_cxx_compiler_flag("-mavx512f" COMPILER_SUPPORT_AVX)
+    if(COMPILER_SUPPORT_AVX)
+      message(STATUS "GNU C++ compiler supports AVX")
+    else()
+      message(FATAL_ERROR "Compiler versions required: GCC (>= 4.9), Intel (>= 15)")
+    endif()
+  endif()
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+    check_cxx_compiler_flag("-xCORE-AVX512" COMPILER_SUPPORT_AVX)
+    if(COMPILER_SUPPORT_AVX)
+      message(STATUS "Intel C++ compiler supports AVX")
+    else()
+      message(FATAL_ERROR "Compiler versions required: GCC (>= 4.9), Intel (>= 15)")
+    endif()
+  endif()
+
+  #compiler flag to enable AVX512 SIMD instructions
+  if (SIMD_SUPPORT STREQUAL avx512)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -DPASGAL_ENABLE_AVX512")
+    message(STATUS "Enabling AVX512...")
+  endif()
+
+  #compiler flag to enable AVX2 simd instructions
+  if (SIMD_SUPPORT STREQUAL avx2)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -DPASGAL_ENABLE_AVX2")
+    message(STATUS "Enabling AVX2...")
+  endif()
+
+else()
+
+  message(STATUS "AVX option not provided, disabling SIMD support...")
+
+endif()
+
+# --------------------------------------------------------------
+# Indicate CMake 2.7 and above that we don't want to mix relative
+#  and absolute paths in linker lib lists.
+# Run "cmake --help-policy CMP0003" for more information.
+# --------------------------------------------------------------
+if(COMMAND cmake_policy)
+  cmake_policy(SET CMP0003 NEW)
+
+  #for recognizing numbers and boolean constants in if()
+  if(CMAKE_VERSION VERSION_GREATER 2.6.4)
+    cmake_policy(SET CMP0012 NEW)
+  endif()
+endif()
+
+#### OpenMP
+find_package(OpenMP)
+# FindOpenMP defines the OpenMP_C_FLAGS and OpenMP_CXX_FLAGS.
+if (OPENMP_FOUND)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  message(STATUS "Found OpenMP")
+endif()
 
 #compile testing code
 if (BUILD_TESTS)
@@ -43,17 +95,19 @@ if (BUILD_TESTS)
   add_subdirectory("${PROJECT_SOURCE_DIR}/ext/googletest")
 endif(BUILD_TESTS)
 
-message(STATUS "Warning: Using hard coded paths to locate protobuf library")
+set(PROTOBUF_DIR CACHE STRING "absolute path to protobuf installation directory")
 
-############
-#Configure PROTOBUF installation directory 
-set(PROTOBUF_INSTALL_DIRECTORY "/work/04042/cjain7/stampede2/Intel/utility/protobuf-3.6.0/local_install")
-############
+#User is expected to set PROTOBUF_DIR 
+set(PROTOBUF_INCLUDE_DIR "${PROTOBUF_DIR}/include")
+set(PROTOBUF_LIBRARY "${PROTOBUF_DIR}/lib/libprotobuf.so")
+set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_DIR}/bin/protoc")
 
+if(EXISTS "${PROTOBUF_INCLUDE_DIR}" AND EXISTS "${PROTOBUF_LIBRARY}" AND EXISTS "${PROTOBUF_PROTOC_EXECUTABLE}")
+  message(STATUS "Protobuf libraries, header files and executables located")
+else()
+  message(FATAL_ERROR "Protobuf path is invalid, cannot find required libraries, header files or executables.")
+endif()
 
-set(PROTOBUF_INCLUDE_DIR "${PROTOBUF_INSTALL_DIRECTORY}/include")
-set(PROTOBUF_LIBRARY "${PROTOBUF_INSTALL_DIRECTORY}/lib/libprotobuf.so")
-set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_INSTALL_DIRECTORY}/bin/protoc")
 find_package(Protobuf REQUIRED)
 
 #generate C++ proto files

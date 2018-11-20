@@ -528,13 +528,14 @@ namespace psgl
       assert (readSet_P1.size() == 2 * readSet.size() );
 
       //align read to ref.
-#ifdef __AVX512BW__
+#if defined(PASGAL_ENABLE_AVX512) || defined(PASGAL_ENABLE_AVX2)
 
       //there would be few padded characters at the end of qry seq
       //take that into account when computing max. read length
       auto blockHeight = Phase1_Vectorized< SimdInst<int8_t> >::blockHeight;
       maxReadLength += blockHeight - 1 - (maxReadLength - 1) % blockHeight; 
 
+  #if defined(PASGAL_ENABLE_AVX512)
       //decide precision by looking at maximum score possible
       if (maxReadLength * SCORE::match <= INT8_MAX) 
       {
@@ -551,6 +552,11 @@ namespace psgl
         Phase1_Vectorized< SimdInst<int32_t> > obj (readSet_P1, graph); 
         obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
       }
+  #else /* Disable dynamic precision for AVX2  TODO : Left for later */ 
+      Phase1_Vectorized< SimdInst<int32_t> > obj (readSet_P1, graph);
+      obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
+  #endif
+      
 #else
       alignToDAGLocal_Phase1_scalar (readSet_P1, graph, bestScoreVector_P1);
 #endif
@@ -610,13 +616,14 @@ namespace psgl
       assert (readSet_P1_R.size() == readSet.size() );
 
       //align reverse read to ref.
-#ifdef __AVX512BW__
+#if defined(PASGAL_ENABLE_AVX512) || defined(PASGAL_ENABLE_AVX2)
 
       //there would be few padded characters at the end of qry seq
       //take that into account when computing max. read length
       auto blockHeight = Phase1_Rev_Vectorized< SimdInst<int8_t> >::blockHeight;
       maxReadLength += blockHeight - 1 - (maxReadLength - 1) % blockHeight; 
 
+  #if defined(PASGAL_ENABLE_AVX512)
       //decide precision by looking at maximum score possible
       //offset by 1 because we augment the score by 1 during rev. DP
       if (maxReadLength * SCORE::match <= INT8_MAX - 1) 
@@ -634,6 +641,10 @@ namespace psgl
         Phase1_Rev_Vectorized< SimdInst<int32_t> > obj (readSet_P1_R, graph); 
         obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
       }
+  #else 
+      Phase1_Rev_Vectorized< SimdInst<int32_t> > obj (readSet_P1_R, graph); 
+      obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
+  #endif
 
 #else
       alignToDAGLocal_Phase1_rev_scalar (readSet_P1_R, graph, outputBestScoreVector);
