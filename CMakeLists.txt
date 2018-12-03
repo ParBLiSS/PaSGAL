@@ -25,6 +25,12 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib CACHE PATH "Output directory f
 OPTION(ENABLE_VTUNE "Turn on/off the vtune support with intel compiler" OFF)
 # Check if the user want to build google test applications
 OPTION(BUILD_TESTS "Inform whether test applications should be built" OFF)
+# Check if user wants to print verbose debug messages
+OPTION(DEFINE_DEBUG_MACRO "Print verbose debug messages" OFF) 
+
+IF(DEFINE_DEBUG_MACRO)
+  ADD_DEFINITIONS(-DDEBUG)
+ENDIF(DEFINE_DEBUG_MACRO)
 
 SET(SIMD_SUPPORT avx512 CACHE STRING "Choose SIMD instrinsics, options are: avx512 avx2 none")
 SET_PROPERTY(CACHE SIMD_SUPPORT PROPERTY STRINGS avx512 avx2 none)
@@ -105,7 +111,7 @@ set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_DIR}/bin/protoc")
 if(EXISTS "${PROTOBUF_INCLUDE_DIR}" AND EXISTS "${PROTOBUF_LIBRARY}" AND EXISTS "${PROTOBUF_PROTOC_EXECUTABLE}")
   message(STATUS "Protobuf libraries, header files and executables located")
 else()
-  message(FATAL_ERROR "Protobuf path is invalid, cannot find required libraries, header files or executables.")
+  message(FATAL_ERROR "Protobuf path is invalid, cannot find required libraries, header files or executables. Set the cmake variable PROTOBUF_DIR properly.")
 endif()
 
 find_package(Protobuf REQUIRED)

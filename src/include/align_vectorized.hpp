@@ -35,7 +35,7 @@
 namespace psgl
 {
   /**
-   * Parameters and SIMD instructions specific for certain score type.
+   * Parameters and SIMD instructions specific for different score precisions required
    */
 
   template<typename T> struct SimdInst {};
@@ -60,6 +60,8 @@ namespace psgl
       static inline __mxxxi blend (mmask_t k, const __mxxxi& a, const __mxxxi& b) {return _mm512_mask_blend_epi32(k, a, b); }
       static inline __mxxxi mask_set1 (const __mxxxi& a, mmask_t k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
       static inline __mxxxi mask_set1_32 (const __mxxxi& a, mmask_t k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
+      static inline mmask_t combine_mask (mmask_t k0, mmask_t k1, mmask_t k2, mmask_t k3) {return k0;}
+      static inline void update_cols (__mxxxi& c0, __mxxxi& c1, __mxxxi& c2, __mxxxi& c3, int32_t val, mmask_t k) {c0 = mask_set1_32 (c0, k, val);}
 
 #elif defined(PASGAL_ENABLE_AVX2)
       static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
@@ -73,23 +75,23 @@ namespace psgl
       static inline __mxxxi cmpeq (const __mxxxi& a, const __mxxxi& b) { return _mm256_cmpeq_epi32(a, b); }  
       static inline __mxxxi cmpeq_32 (const __mxxxi& a, const __mxxxi& b) { return _mm256_cmpeq_epi32(a, b); }  
       static inline __mxxxi blend (const __mxxxi& k, const __mxxxi& a, const __mxxxi& b) {return _mm256_blendv_epi8(a, b, k); }
-      static inline __mxxxi mask_set1 (const __mxxxi& a, const __mxxxi& k, int32_t b) { return _mm256_blendv_epi8 (a, set1 (b), k); }
-      static inline __mxxxi mask_set1_32 (const __mxxxi& a, const __mxxxi& k, int32_t b) { return _mm256_blendv_epi8 (a, set1_32 (b), k); }
+      static inline __mxxxi mask_set1 (const __mxxxi& a, const __mxxxi& k, int32_t b) { return blend(k, a, set1 (b)); }
+      static inline __mxxxi mask_set1_32 (const __mxxxi& a, const __mxxxi& k, int32_t b) { return blend(k, a, set1_32 (b)); }
+      static inline __mxxxi combine_mask (const __mxxxi& k0, const __mxxxi& k1, const __mxxxi& k2, const __mxxxi& k3) {return k0;}
+      static inline void update_cols (__mxxxi& c0, __mxxxi& c1, __mxxxi& c2, __mxxxi& c3, int32_t val, const __mxxxi& k){c0 = mask_set1_32 (c0, k, val);}
 #endif
 
     };
 
-/* Dynamic precision only supported when using AVX512 */
-#if defined(PASGAL_ENABLE_AVX512)
   template<>
     struct SimdInst<int16_t> 
     {
       typedef int16_t type;
-      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
 
+#if defined(PASGAL_ENABLE_AVX512)
+      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
       typedef __mmask32 mmask_t;
       typedef SimdInst<int32_t>::mmask_t mmask_T;  //for 32-bit integer operations
-
       static inline __mxxxi add (const __mxxxi& a, const __mxxxi& b) { return _mm512_add_epi16(a, b); }
       static inline __mxxxi set1 (int16_t a) { return _mm512_set1_epi16(a); }
       static inline __mxxxi set1_32 (int32_t a) { return _mm512_set1_epi32(a); }
@@ -102,6 +104,37 @@ namespace psgl
       static inline __mxxxi blend (mmask_t k, const __mxxxi& a, const __mxxxi& b) {return _mm512_mask_blend_epi16(k, a, b); }
       static inline __mxxxi mask_set1 (const __mxxxi& a, mmask_t k, int16_t b) { return _mm512_mask_set1_epi16(a, k, b); } 
       static inline __mxxxi mask_set1_32 (const __mxxxi& a, mmask_T k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
+      static inline mmask_t combine_mask (mmask_T k0, mmask_T k1, mmask_T k2, mmask_T k3) { 
+        return ((mmask_t) k0) | ((mmask_t) k1) << 16;
+      }
+      static inline void update_cols (__mxxxi& c0, __mxxxi& c1, __mxxxi& c2, __mxxxi& c3, int32_t val, mmask_t k) { 
+        c0 = mask_set1_32 (c0, k      ,  val);
+        c1 = mask_set1_32 (c1, k >> 16,  val);
+      }
+
+#elif defined(PASGAL_ENABLE_AVX2)
+      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
+      static inline __mxxxi add (const __mxxxi& a, const __mxxxi& b) { return _mm256_add_epi16(a, b); }
+      static inline __mxxxi set1 (int16_t a) { return _mm256_set1_epi16(a); }
+      static inline __mxxxi set1_32 (int32_t a) { return _mm256_set1_epi32(a); }
+      static inline __mxxxi max (const __mxxxi& a, const __mxxxi& b) { return _mm256_max_epi16(a, b); }
+      static inline __mxxxi zero() {return _mm256_setzero_si256(); }
+      static inline void store (__mxxxi *mem_addr, const __mxxxi &a) { _mm256_store_si256(mem_addr, a); }
+      static inline __mxxxi load (const __mxxxi *mem_addr) { return _mm256_load_si256(mem_addr); }
+      static inline __mxxxi cmpeq (const __mxxxi& a, const __mxxxi& b) { return _mm256_cmpeq_epi16(a, b); }  
+      static inline __mxxxi cmpeq_32 (const __mxxxi& a, const __mxxxi& b) { return _mm256_cmpeq_epi32(a, b); }  
+      static inline __mxxxi blend (const __mxxxi& k, const __mxxxi& a, const __mxxxi& b) {return _mm256_blendv_epi8(a, b, k); }
+      static inline __mxxxi mask_set1 (const __mxxxi& a, const __mxxxi& k, int16_t b) { return blend(k, a, set1 (b)); }
+      static inline __mxxxi mask_set1_32 (const __mxxxi& a, const __mxxxi& k, int32_t b) { return blend(k, a, set1_32 (b)); }
+      static inline __mxxxi combine_mask (const __mxxxi& k0, const __mxxxi& k1, const __mxxxi& k2, const __mxxxi& k3) { 
+        return _mm256_permute4x64_epi64 (_mm256_packs_epi32 (k0, k1), 0xd8); 
+      }
+      static inline void update_cols (__mxxxi& c0, __mxxxi& c1, __mxxxi& c2, __mxxxi& c3, int32_t val, const __mxxxi& k) { 
+        c0 = mask_set1_32 (c0, _mm256_cvtepi16_epi32 (_mm256_castsi256_si128 (k)),     val);
+        c1 = mask_set1_32 (c1, _mm256_cvtepi16_epi32 (_mm256_extracti128_si256 (k, 1)), val);
+      }
+#endif
+
 
     };
 
@@ -109,11 +142,11 @@ namespace psgl
     struct SimdInst<int8_t> 
     {
       typedef int8_t type;
-      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
 
+#if defined(PASGAL_ENABLE_AVX512)
+      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
       typedef __mmask64 mmask_t;
       typedef SimdInst<int32_t>::mmask_t mmask_T;  //for 32-bit integer operations
-
       static inline __mxxxi add (const __mxxxi& a, const __mxxxi& b) { return _mm512_add_epi8(a, b); }
       static inline __mxxxi set1 (int8_t a) { return _mm512_set1_epi8(a); }
       static inline __mxxxi set1_32 (int32_t a) { return _mm512_set1_epi32(a); }
@@ -126,9 +159,42 @@ namespace psgl
       static inline __mxxxi blend (mmask_t k, const __mxxxi& a, const __mxxxi& b) {return _mm512_mask_blend_epi8(k, a, b); }
       static inline __mxxxi mask_set1 (const __mxxxi& a, mmask_t k, int8_t b) { return _mm512_mask_set1_epi8(a, k, b); } 
       static inline __mxxxi mask_set1_32 (const __mxxxi& a, mmask_T k, int32_t b) { return _mm512_mask_set1_epi32(a, k, b); } 
+      static inline mmask_t combine_mask (mmask_T k0, mmask_T k1, mmask_T k2, mmask_T k3) {
+        return ((mmask_t) k0) | ((mmask_t) k1) << 16 | ((mmask_t) k2) << 32 | ((mmask_t) k3) << 48; 
+      }
+      static inline void update_cols (__mxxxi& c0, __mxxxi& c1, __mxxxi& c2, __mxxxi& c3, int32_t val, mmask_t k) {
+        c0 = mask_set1_32 (c0, k      ,  val);
+        c1 = mask_set1_32 (c1, k >> 16,  val);
+        c2 = mask_set1_32 (c2, k >> 32,  val);
+        c3 = mask_set1_32 (c3, k >> 48,  val);
+      }
 
-    };
+#elif defined(PASGAL_ENABLE_AVX2)
+      static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
+      static inline __mxxxi add (const __mxxxi& a, const __mxxxi& b) { return _mm256_add_epi8(a, b); }
+      static inline __mxxxi set1 (int8_t a) { return _mm256_set1_epi8(a); }
+      static inline __mxxxi set1_32 (int32_t a) { return _mm256_set1_epi32(a); }
+      static inline __mxxxi max (const __mxxxi& a, const __mxxxi& b) { return _mm256_max_epi8(a, b); }
+      static inline __mxxxi zero() {return _mm256_setzero_si256(); }
+      static inline void store (__mxxxi *mem_addr, const __mxxxi &a) { _mm256_store_si256(mem_addr, a); }
+      static inline __mxxxi load (const __mxxxi *mem_addr) { return _mm256_load_si256(mem_addr); }
+      static inline __mxxxi cmpeq (const __mxxxi& a, const __mxxxi& b) { return _mm256_cmpeq_epi8(a, b); }  
+      static inline __mxxxi cmpeq_32 (const __mxxxi& a, const __mxxxi& b) { return _mm256_cmpeq_epi32(a, b); }  
+      static inline __mxxxi blend (const __mxxxi& k, const __mxxxi& a, const __mxxxi& b) {return _mm256_blendv_epi8(a, b, k); }
+      static inline __mxxxi mask_set1 (const __mxxxi& a, const __mxxxi& k, int8_t b) { return blend(k, a, set1 (b)); }
+      static inline __mxxxi mask_set1_32 (const __mxxxi& a, const __mxxxi& k, int32_t b) { return blend(k, a, set1_32 (b)); }
+      static inline __mxxxi combine_mask (const __mxxxi& k0, const __mxxxi& k1, const __mxxxi& k2, const __mxxxi& k3) { 
+        __mxxxi permuteOrder = _mm256_set_epi32(7, 3, 6, 2, 5, 1, 4, 0);
+        return _mm256_permutevar8x32_epi32 (_mm256_packs_epi16( _mm256_packs_epi32 (k0, k1), _mm256_packs_epi32 (k2, k3)), permuteOrder); 
+      }
+      static inline void update_cols (__mxxxi& c0, __mxxxi& c1, __mxxxi& c2, __mxxxi& c3, int32_t val, const __mxxxi& k) { 
+        c0 = mask_set1_32 (c0, _mm256_cvtepi8_epi32 (_mm256_castsi256_si128 (k)),  val);
+        c1 = mask_set1_32 (c1, _mm256_cvtepi8_epi32 ( _mm_set1_epi64x (_mm256_extract_epi64 (k, 1))),  val);
+        c2 = mask_set1_32 (c2, _mm256_cvtepi8_epi32 (_mm256_extracti128_si256 (k, 1)),  val);
+        c3 = mask_set1_32 (c3, _mm256_cvtepi8_epi32 ( _mm_set1_epi64x (_mm256_extract_epi64 (k, 3))),  val);
+      }
 #endif
+    };
 
   /**
    * @brief   Supports phase 1 DP in forward direction
@@ -201,13 +267,9 @@ namespace psgl
             constexpr size_t colValuesPerRegister = SIMD_REG_SIZE / (8 * sizeof(int32_t));
             constexpr size_t colRegistersCountPerBatch = SIMD::numSeqs / colValuesPerRegister;
 
-#if defined(PASGAL_ENABLE_AVX512)
             static_assert ( colRegistersCountPerBatch == 1 || 
                             colRegistersCountPerBatch == 2 || 
                             colRegistersCountPerBatch == 4, "has to be either 1, 2 or 4"); 
-#elif defined(PASGAL_ENABLE_AVX2)
-            static_assert ( colRegistersCountPerBatch == 1, "has to be 1"); 
-#endif
 
             // modified containers to hold best-score info
             // vector elements aligned to 64 byte boundaries
@@ -222,13 +284,13 @@ namespace psgl
             //when debugging for low-precision
 #ifdef DEBUG
             for (auto &e : _bestScoreVector)
-              simdUtils::print_avx_num16 (e);
-
-            for (auto &e : _bestScoreColVector)
-              simdUtils::print_avx_num32 (e);
+              simdUtils<typename SIMD::type>::print_avx_num (e);
 
             for (auto &e : _bestScoreRowVector)
-              simdUtils::print_avx_num16 (e);
+              simdUtils<typename SIMD::type>::print_avx_num (e);
+
+            for (auto &e : _bestScoreColVector)
+              simdUtils<int32_t>::print_avx_num (e);
 #endif
 
 
@@ -259,7 +321,7 @@ namespace psgl
                   outputBestScoreVector[originalReadId].qryRowEnd     = storeRows[j];
 
 #ifdef DEBUG
-                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << storeScores[j] << ", qryRowEnd = " << storeRows[j] << ", refColumnEnd = " << storeCols[j] << "\n";
+                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << (int) storeScores[j] << ", qryRowEnd = " << (int) storeRows[j] << ", refColumnEnd = " << (int) storeCols[j] << "\n";
 #endif
                 }
               }
@@ -283,7 +345,9 @@ namespace psgl
             lengthTuples.emplace_back (readSet[i].length(), i);
 
           //sort in descending order, longer reads first
-          std::sort (lengthTuples.begin(), lengthTuples.end(), std::greater<pair_t>() );
+          std::sort (lengthTuples.begin(), lengthTuples.end(), [](const pair_t &left, const pair_t &right) {
+              return left.first > right.first || (left.first == right.first && left.second < right.second);
+              });
 
           for(auto &e : lengthTuples)
           {
@@ -571,26 +635,7 @@ namespace psgl
 
                       //update row and column values accordingly
                       bestRows512 = SIMD::mask_set1 (bestRows512, updated, (typename SIMD::type) (j + l));
-
-                      if (colRegistersCountPerBatch == 1)
-                      {
-                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
-                      }
-#if defined(PASGAL_ENABLE_AVX512)
-                      else if (colRegistersCountPerBatch == 2)
-                      {
-                        //lowest significant bits in 'updated' correspond to first set of reads
-                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated ,  (int32_t) k);
-                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
-                      }
-                      else if (colRegistersCountPerBatch == 4)
-                      {
-                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated ,  (int32_t) k);
-                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
-                        bestCols512_2 = SIMD::mask_set1_32 (bestCols512_2, updated >> 2*colValuesPerRegister,  (int32_t) k);
-                        bestCols512_3 = SIMD::mask_set1_32 (bestCols512_3, updated >> 3*colValuesPerRegister,  (int32_t) k);
-                      }
-#endif
+                      SIMD::update_cols (bestCols512_0, bestCols512_1, bestCols512_2, bestCols512_3, (int32_t) k, updated);
 
                       //save current score in small buffer
                       nearbyColumns[k & (blockWidth-1)][l] = currentMax512;
@@ -716,13 +761,9 @@ namespace psgl
             constexpr size_t colValuesPerRegister = SIMD_REG_SIZE / (8 * sizeof(int32_t));
             constexpr size_t colRegistersCountPerBatch = SIMD::numSeqs / colValuesPerRegister;
 
-#if defined(PASGAL_ENABLE_AVX512)
             static_assert ( colRegistersCountPerBatch == 1 || 
                             colRegistersCountPerBatch == 2 || 
                             colRegistersCountPerBatch == 4, "has to be either 1, 2 or 4"); 
-#elif defined(PASGAL_ENABLE_AVX2)
-            static_assert ( colRegistersCountPerBatch == 1, "has to be 1"); 
-#endif
 
             // modified containers to hold best-score info
             // vector elements aligned to 64 byte boundaries
@@ -736,13 +777,13 @@ namespace psgl
             //when debugging for low-precision
 #ifdef DEBUG
             for (auto &e : _bestScoreVector)
-              simdUtils::print_avx_num16 (e);
-
-            for (auto &e : _bestScoreColVector)
-              simdUtils::print_avx_num32 (e);
+              simdUtils<typename SIMD::type>::print_avx_num (e);
 
             for (auto &e : _bestScoreRowVector)
-              simdUtils::print_avx_num16 (e);
+              simdUtils<typename SIMD::type>::print_avx_num (e);
+
+            for (auto &e : _bestScoreColVector)
+              simdUtils<int32_t>::print_avx_num (e);
 #endif
 
             //parse best scores from vector registers
@@ -768,7 +809,7 @@ namespace psgl
                   auto originalReadId = sortedReadOrder[i * SIMD::numSeqs + j];
 
 #ifdef DEBUG
-                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_rev_vectorized_wrapper, read # " << originalReadId << ",  score = " << storeScores[j] << ", refColumnStart = " << storeCols[j] << ", qryRowStart = " << readSet[originalReadId].length() - 1 - storeRows[j] << "\n";
+                  std::cout << "INFO, psgl::Phase1_Vectorized::alignToDAGLocal_Phase1_rev_vectorized_wrapper, read # " << originalReadId << ",  score = " << (int) storeScores[j] << ", refColumnStart = " << (int) storeCols[j] << ", qryRowStart = " << (int) (readSet[originalReadId].length() - 1 - storeRows[j]) << "\n";
 #endif
 
                   assert (outputBestScoreVector[originalReadId].score == storeScores[j] - 1);  //offset by 1
@@ -797,7 +838,9 @@ namespace psgl
             lengthTuples.emplace_back (readSet[i].length(), i);
 
           //sort in descending order, longer reads first
-          std::sort (lengthTuples.begin(), lengthTuples.end(), std::greater<pair_t>() );
+          std::sort (lengthTuples.begin(), lengthTuples.end(), [](const pair_t &left, const pair_t &right) {
+              return left.first > right.first || (left.first == right.first && left.second < right.second);
+              });
 
           for(auto &e : lengthTuples)
           {
@@ -1129,25 +1172,7 @@ namespace psgl
 
                       //update row and column values accordingly
                       bestRows512 = SIMD::mask_set1 (bestRows512, updated, (typename SIMD::type) (j + l));
-
-                      if (colRegistersCountPerBatch == 1)
-                      {
-                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
-                      }
-#if defined(PASGAL_ENABLE_AVX512)
-                      else if (colRegistersCountPerBatch == 2)
-                      {
-                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
-                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
-                      }
-                      else if (colRegistersCountPerBatch == 4)
-                      {
-                        bestCols512_0 = SIMD::mask_set1_32 (bestCols512_0, updated,  (int32_t) k);
-                        bestCols512_1 = SIMD::mask_set1_32 (bestCols512_1, updated >> 1*colValuesPerRegister,  (int32_t) k);
-                        bestCols512_2 = SIMD::mask_set1_32 (bestCols512_2, updated >> 2*colValuesPerRegister,  (int32_t) k);
-                        bestCols512_3 = SIMD::mask_set1_32 (bestCols512_3, updated >> 3*colValuesPerRegister,  (int32_t) k);
-                      }
-#endif
+                      SIMD::update_cols (bestCols512_0, bestCols512_1, bestCols512_2, bestCols512_3, (int32_t) k, updated);
 
                       //detect and manipulate the score of the specific optimal alignment we want
                       //this is required to make sure reverse DP reports same alignment as fwd DP
@@ -1157,35 +1182,14 @@ namespace psgl
                         
                         auto compareCell = SIMD::cmpeq (fwdBestRows512, currentRow);
 
-                        if (colRegistersCountPerBatch == 1)
-                        {
-                          auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
-                          compareCell = compareCell & compareCellByCol_0;
-                        }
-#if defined(PASGAL_ENABLE_AVX512)
-                        else if (colRegistersCountPerBatch == 2)
-                        {
-                          auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
-                          auto compareCellByCol_1 = SIMD::cmpeq_32 (fwdBestCols512_1, currentCol);
+                        auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
+                        auto compareCellByCol_1 = SIMD::cmpeq_32 (fwdBestCols512_1, currentCol);
+                        auto compareCellByCol_2 = SIMD::cmpeq_32 (fwdBestCols512_2, currentCol);
+                        auto compareCellByCol_3 = SIMD::cmpeq_32 (fwdBestCols512_3, currentCol);
 
-                          compareCell = compareCell & 
-                            ( ((typename SIMD::mmask_t) compareCellByCol_0) << 0*colValuesPerRegister | 
-                              ((typename SIMD::mmask_t) compareCellByCol_1) << 1*colValuesPerRegister);
-                        }
-                        else if (colRegistersCountPerBatch == 4)
-                        {
-                          auto compareCellByCol_0 = SIMD::cmpeq_32 (fwdBestCols512_0, currentCol);
-                          auto compareCellByCol_1 = SIMD::cmpeq_32 (fwdBestCols512_1, currentCol);
-                          auto compareCellByCol_2 = SIMD::cmpeq_32 (fwdBestCols512_2, currentCol);
-                          auto compareCellByCol_3 = SIMD::cmpeq_32 (fwdBestCols512_3, currentCol);
+                        compareCell = compareCell & 
+                          SIMD::combine_mask (compareCellByCol_0, compareCellByCol_1, compareCellByCol_2, compareCellByCol_3);
 
-                          compareCell = compareCell & 
-                            ( ((typename SIMD::mmask_t) compareCellByCol_0) << 0*colValuesPerRegister | 
-                              ((typename SIMD::mmask_t) compareCellByCol_1) << 1*colValuesPerRegister |
-                              ((typename SIMD::mmask_t) compareCellByCol_2) << 2*colValuesPerRegister |
-                              ((typename SIMD::mmask_t) compareCellByCol_3) << 3*colValuesPerRegister);
-                        }
-#endif
                         currentMax512 = SIMD::mask_set1 (currentMax512, compareCell, (typename SIMD::type) (SCORE::match + 1)); 
                       }
 
@@ -1233,7 +1237,8 @@ namespace psgl
             std::cout << "TIMER, psgl::alignToDAGLocal_Phase1_rev_vectorized" 
                       << " (precision= " << sizeof(typename SIMD::type) << " bytes)" 
                       << ", individual thread timings (s) : " 
-                      << printStats(threadTimings) << "\n"; 
+                      << printStats(threadTimings) 
+                      << "\n"; 
 
 //#ifdef VTUNE_SUPPORT
             //__itt_pause();
