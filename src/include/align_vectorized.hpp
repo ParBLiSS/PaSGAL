@@ -226,6 +226,9 @@ namespace psgl
         //sorted permutation order of input reads
         std::vector<size_t> sortedReadOrder;
 
+        //input parameters (e.g., scoring scheme)
+        const Parameters &parameters;
+
       public:
 
         //small temporary storage buffer for DP scores
@@ -242,8 +245,9 @@ namespace psgl
          * @param[in]   g           input reference graph
          */
         Phase1_Vectorized(const std::vector<std::string> &readSet, 
-            const CSR_char_container &g) :
-          readSet (readSet), graph (g)
+            const CSR_char_container &g,
+            const Parameters &p) :
+          readSet (readSet), graph (g), parameters (p)
         {
           this->sortReadsForLoadBalance();
           this->convertToSOA();
@@ -459,10 +463,10 @@ namespace psgl
             std::fill (bestRows.begin(), bestRows.end(), SIMD::zero() );
 
             //init score simd vectors
-            __mxxxi match512    = SIMD::set1 ((typename SIMD::type) SCORE::match);
-            __mxxxi mismatch512 = SIMD::set1 ((typename SIMD::type) SCORE::mismatch);
-            __mxxxi del512      = SIMD::set1 ((typename SIMD::type) SCORE::del);
-            __mxxxi ins512      = SIMD::set1 ((typename SIMD::type) SCORE::ins);
+            __mxxxi match512    = SIMD::set1 ((typename SIMD::type) parameters.match);
+            __mxxxi mismatch512 = SIMD::set1 ((typename SIMD::type) -1 * parameters.mismatch);
+            __mxxxi del512      = SIMD::set1 ((typename SIMD::type) -1 * parameters.del);
+            __mxxxi ins512      = SIMD::set1 ((typename SIMD::type) -1 * parameters.ins);
 
             std::vector<double> threadTimings (omp_get_max_threads(), 0);
 
@@ -720,6 +724,9 @@ namespace psgl
         //sorted permutation order of input reads
         std::vector<size_t> sortedReadOrder;
 
+        //input parameters (e.g., scoring scheme)
+        const Parameters &parameters;
+
       public:
 
         //small temporary storage buffer for DP scores
@@ -736,8 +743,9 @@ namespace psgl
          * @param[in]   g           input reference graph
          */
         Phase1_Rev_Vectorized(const std::vector<std::string> &readSet, 
-            const CSR_char_container &g) :
-          readSet (readSet), graph (g)
+            const CSR_char_container &g,
+            const Parameters &p) :
+          readSet (readSet), graph (g), parameters (p)
         {
           this->sortReadsForLoadBalance();
           this->convertToSOA();
@@ -955,10 +963,10 @@ namespace psgl
             std::fill (bestRows.begin(),   bestRows.end(),   SIMD::zero() );
 
             //init score simd vectors
-            __mxxxi match512    = SIMD::set1 ((typename SIMD::type) SCORE::match);
-            __mxxxi mismatch512 = SIMD::set1 ((typename SIMD::type) SCORE::mismatch);
-            __mxxxi del512      = SIMD::set1 ((typename SIMD::type) SCORE::del);
-            __mxxxi ins512      = SIMD::set1 ((typename SIMD::type) SCORE::ins);
+            __mxxxi match512    = SIMD::set1 ((typename SIMD::type) parameters.match);
+            __mxxxi mismatch512 = SIMD::set1 ((typename SIMD::type) -1 * parameters.mismatch);
+            __mxxxi del512      = SIMD::set1 ((typename SIMD::type) -1 * parameters.del);
+            __mxxxi ins512      = SIMD::set1 ((typename SIMD::type) -1 * parameters.ins);
 
             std::vector<double> threadTimings (omp_get_max_threads(), 0);
 
@@ -1190,7 +1198,7 @@ namespace psgl
                         compareCell = compareCell & 
                           SIMD::combine_mask (compareCellByCol_0, compareCellByCol_1, compareCellByCol_2, compareCellByCol_3);
 
-                        currentMax512 = SIMD::mask_set1 (currentMax512, compareCell, (typename SIMD::type) (SCORE::match + 1)); 
+                        currentMax512 = SIMD::mask_set1 (currentMax512, compareCell, (typename SIMD::type) (parameters.match + 1)); 
                       }
 
                       //save current score in small buffer

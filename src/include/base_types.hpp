@@ -15,18 +15,23 @@
 
 namespace psgl
 {
-  /**
-   * @brief     scores
-   * @details   assume edits wrt. reference sequence
-   */
-  struct SCORE
-  {
-    static const int8_t match = 1;
 
-    //penalties
-    static const int8_t mismatch = -1;
-    static const int8_t ins = -1;
-    static const int8_t del = -1;
+  /**
+   * @brief     input parameters that are expected 
+   *            as command line arguments
+   **/
+  struct Parameters
+  {
+    std::string rfile;        //reference graph file
+    std::string mode;         //reference graph format
+    std::string qfile;        //query sequence file
+    std::string ofile;        //output file
+    int threads;              //thread count
+
+    int match;                //match score 
+    int mismatch;             //mismatch penalty (abs. value) 
+    int ins;                  //insertion penalty (abs. value) 
+    int del;                  //deletion penalty (abs. value)
   };
 
   /**
@@ -34,9 +39,9 @@ namespace psgl
    */
   enum MODE
   {
-    GLOBAL,     
+    GLOBAL,     //TODO
     LOCAL,
-    SEMIGLOBAL
+    SEMIGLOBAL  //TODO
   };  
 
   /**

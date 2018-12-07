@@ -8,13 +8,17 @@
 #define GRAPH_ALIGN_HPP
 
 #include <immintrin.h>
+#include <x86intrin.h>
 
 #include "graphLoad.hpp"
 #include "csr_char.hpp"
 #include "graph_iter.hpp"
 #include "base_types.hpp"
 #include "utils.hpp"
+
+#if defined(PASGAL_ENABLE_AVX512) || defined(PASGAL_ENABLE_AVX2)
 #include "align_vectorized.hpp"
+#endif
 
 //External includes
 #include "kseq.h"
@@ -31,12 +35,14 @@ namespace psgl
    *                                find locations of the best alignment of each read
    * @param[in]   readSet           vector of input query sequences to align
    * @param[in]   graph
+   * @param[in]   parameters        input parameters
    * @param[out]  bestScoreVector   vector to keep value and location of best scores,
    *                                vector size is same as count of the reads
    * @note                          reverse complement of the read is not handled here
    */
   void alignToDAGLocal_Phase1_scalar( const std::vector<std::string> &readSet,
                                       const CSR_char_container &graph,
+                                      const Parameters &parameters, 
                                       std::vector< BestScoreInfo > &bestScoreVector)
   {
     assert (bestScoreVector.size() == readSet.size());
@@ -77,7 +83,7 @@ namespace psgl
             int32_t currentMax = 0;
 
             //see if query and ref. character match
-            int32_t matchScore = curChar == readSet[readno][i] ? SCORE::match : SCORE::mismatch;
+            int32_t matchScore = curChar == readSet[readno][i] ? parameters.match : -1 * parameters.mismatch;
 
             //match-mismatch edit
             currentMax = psgl_max (currentMax, matchScore);   //local alignment can also start with a match at this char
@@ -89,11 +95,11 @@ namespace psgl
               //'& 1' is same as doing modulo 2
 
               //paths with deletion edit
-              currentMax = psgl_max (currentMax, matrix[i & 1][ graph.adjcny_in[k] ] + SCORE::del);
+              currentMax = psgl_max (currentMax, matrix[i & 1][ graph.adjcny_in[k] ] - parameters.del);
             }
 
             //insertion edit
-            currentMax = psgl_max( currentMax, matrix[(i-1) & 1][j] + SCORE::ins );
+            currentMax = psgl_max( currentMax, matrix[(i-1) & 1][j] - parameters.ins );
 
             matrix[i & 1][j] = currentMax;
 
@@ -132,12 +138,14 @@ namespace psgl
    *                                find begin location of the best alignment of each read
    * @param[in]   readSet           vector of input query sequences to align
    * @param[in]   graph
+   * @param[in]   parameters        input parameters
    * @param[out]  bestScoreVector   vector to keep value and location of best scores,
    *                                vector size is same as count of the reads
    * @note                          reverse complement of the read is not handled here
    */
   void alignToDAGLocal_Phase1_rev_scalar( const std::vector<std::string> &readSet,
                                           const CSR_char_container &graph,
+                                          const Parameters &parameters, 
                                           std::vector< BestScoreInfo > &bestScoreVector)
   {
     assert (bestScoreVector.size() == readSet.size());
@@ -178,7 +186,7 @@ namespace psgl
             int32_t currentMax = 0;
 
             //see if query and ref. character match
-            int32_t matchScore = curChar == readSet[readno][i] ? SCORE::match : SCORE::mismatch;
+            int32_t matchScore = curChar == readSet[readno][i] ? parameters.match : -1 * parameters.mismatch;
 
             //match-mismatch edit
             currentMax = psgl_max (currentMax, matchScore);   //local alignment can also start with a match at this char
@@ -190,11 +198,11 @@ namespace psgl
               //'& 1' is same as doing modulo 2
 
               //paths with deletion edit
-              currentMax = psgl_max (currentMax, matrix[i & 1][ graph.adjcny_out[k] ] + SCORE::del);
+              currentMax = psgl_max (currentMax, matrix[i & 1][ graph.adjcny_out[k] ] - parameters.del);
             }
 
             //insertion edit
-            currentMax = psgl_max( currentMax, matrix[(i-1) & 1][j] + SCORE::ins );
+            currentMax = psgl_max( currentMax, matrix[(i-1) & 1][j] - parameters.ins );
 
             matrix[i & 1][j] = currentMax;
 
@@ -210,10 +218,10 @@ namespace psgl
             if (j == bestScoreVector[readno].refColumnEnd && (readLength - 1 - i) == bestScoreVector[readno].qryRowEnd)
             {
               //local alignment needs to end with a match
-              assert (currentMax == SCORE::match);
+              assert (currentMax == parameters.match);
 
               //add one so that the other end of the optimal alignment can be located without ambuiguity
-              matrix[i & 1][j] = SCORE::match + 1;
+              matrix[i & 1][j] = parameters.match + 1;
             }
           } // end of row computation
         } // end of DP
@@ -240,22 +248,21 @@ namespace psgl
    * @brief                         execute second phase of alignment i.e. compute cigar
    * @param[in]   readSet
    * @param[in]   graph
+   * @param[in]   parameters        input parameters
    * @param[in]   bestScoreVector   best score and alignment location for each read
    * @note                          we assume that query sequences are oriented properly
    *                                after executing the alignment phase 1
    */
   void alignToDAGLocal_Phase2(  const std::vector<std::string> &readSet,
                                 const CSR_char_container &graph,
+                                const Parameters &parameters, 
                                 std::vector< BestScoreInfo > &bestScoreVector)
   {
     assert (bestScoreVector.size() == readSet.size());
 
-    //not using more than 48 threads
-    int maxThreadCount = omp_get_max_threads() <= 48 ? omp_get_max_threads() : 48;
+    std::vector<double> threadTimings (parameters.threads, 0);
 
-    std::vector<double> threadTimings (maxThreadCount, 0);
-
-#pragma omp parallel num_threads(maxThreadCount)  
+#pragma omp parallel  
     {
       threadTimings[omp_get_thread_num()] = omp_get_wtime();
 
@@ -313,11 +320,11 @@ namespace psgl
               char curChar = graph.vertex_label[j + j0];
 
               //insertion edit
-              int32_t fromInsertion = matrix[(i-1) & 1][j] + SCORE::ins;
+              int32_t fromInsertion = matrix[(i-1) & 1][j] - parameters.ins;
               //'& 1' is same as doing modulo 2
 
               //match-mismatch edit
-              int32_t matchScore = curChar == readSet[readno][i + i0] ? SCORE::match : SCORE::mismatch;
+              int32_t matchScore = curChar == readSet[readno][i + i0] ? parameters.match : -1 * parameters.mismatch;
               int32_t fromMatch = matchScore;   //also handles the case when in-degree is zero 
 
               //deletion edit
@@ -329,7 +336,7 @@ namespace psgl
                 if ( graph.adjcny_in[k] >= j0)
                 {
                   fromMatch = psgl_max (fromMatch, matrix[(i-1) & 1][ graph.adjcny_in[k] - j0] + matchScore);
-                  fromDeletion = psgl_max (fromDeletion, matrix[i & 1][ graph.adjcny_in[k] - j0] + SCORE::del);
+                  fromDeletion = psgl_max (fromDeletion, matrix[i & 1][ graph.adjcny_in[k] - j0] - parameters.del);
                 }
               }
 
@@ -383,10 +390,10 @@ namespace psgl
             char curChar = graph.vertex_label[col + j0];
 
             //insertion edit
-            int32_t fromInsertion = aboveRowScores[col] + SCORE::ins;
+            int32_t fromInsertion = aboveRowScores[col] - parameters.ins;
 
             //match-mismatch edit
-            int32_t matchScore = curChar == readSet[readno][row + i0] ? SCORE::match : SCORE::mismatch;
+            int32_t matchScore = curChar == readSet[readno][row + i0] ? parameters.match : -1 * parameters.mismatch;
 
             int32_t fromMatch = matchScore;   //also handles the case when in-degree is zero 
             std::size_t fromMatchPos = col;
@@ -407,9 +414,9 @@ namespace psgl
                   fromMatchPos = fromCol;
                 }
 
-                if (fromDeletion < currentRowScores[fromCol] + SCORE::del)
+                if (fromDeletion < currentRowScores[fromCol] - parameters.del)
                 {
-                  fromDeletion = currentRowScores[fromCol] + SCORE::del;
+                  fromDeletion = currentRowScores[fromCol] - parameters.del;
                   fromDeletionPos = fromCol;
                 }
               }
@@ -419,7 +426,7 @@ namespace psgl
             {
               if (currentRowScores[col] == fromMatch)
               {
-                if (matchScore == SCORE::match)
+                if (matchScore == parameters.match)
                   cigar.push_back('=');
                 else
                   cigar.push_back('X');
@@ -460,7 +467,7 @@ namespace psgl
           psgl::seqUtils::cigarCompact(cigar);
 
           //validate if cigar yields best score
-          assert ( psgl::seqUtils::cigarScore (cigar) ==  bestScoreVector[readno].score );
+          assert ( psgl::seqUtils::cigarScore (cigar, parameters) ==  bestScoreVector[readno].score );
 
           bestScoreVector[readno].cigar = cigar;
 
@@ -487,10 +494,12 @@ namespace psgl
    * @brief                               local alignment routine
    * @param[in]   readSet
    * @param[in]   graph                   node-labeled directed graph 
+   * @param[in]   parameters              input parameters
    * @param[out]  outputBestScoreVector
    */
   void alignToDAGLocal( const std::vector<std::string> &readSet,
       const CSR_char_container &graph,
+      const Parameters &parameters, 
       std::vector< BestScoreInfo > &outputBestScoreVector)
   {
     //create buffer to save best score info for each read and its rev. complement
@@ -536,23 +545,23 @@ namespace psgl
       maxReadLength += blockHeight - 1 - (maxReadLength - 1) % blockHeight; 
 
       //decide precision by looking at maximum score possible
-      if (maxReadLength * SCORE::match <= INT8_MAX) 
+      if (maxReadLength * parameters.match <= INT8_MAX) 
       {
-        Phase1_Vectorized< SimdInst<int8_t> > obj (readSet_P1, graph); 
+        Phase1_Vectorized< SimdInst<int8_t> > obj (readSet_P1, graph, parameters); 
         obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
       }
-      else if (maxReadLength * SCORE::match <= INT16_MAX) 
+      else if (maxReadLength * parameters.match <= INT16_MAX) 
       {
-        Phase1_Vectorized< SimdInst<int16_t> > obj (readSet_P1, graph); 
+        Phase1_Vectorized< SimdInst<int16_t> > obj (readSet_P1, graph, parameters); 
         obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
       }
       else 
       {
-        Phase1_Vectorized< SimdInst<int32_t> > obj (readSet_P1, graph); 
+        Phase1_Vectorized< SimdInst<int32_t> > obj (readSet_P1, graph, parameters); 
         obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
       }
 #else
-      alignToDAGLocal_Phase1_scalar (readSet_P1, graph, bestScoreVector_P1);
+      alignToDAGLocal_Phase1_scalar (readSet_P1, graph, parameters, bestScoreVector_P1);
 #endif
 
       auto tick2 = __rdtsc();
@@ -619,23 +628,23 @@ namespace psgl
 
       //decide precision by looking at maximum score possible
       //offset by 1 because we augment the score by 1 during rev. DP
-      if (maxReadLength * SCORE::match <= INT8_MAX - 1) 
+      if (maxReadLength * parameters.match <= INT8_MAX - 1) 
       {
-        Phase1_Rev_Vectorized< SimdInst<int8_t> > obj (readSet_P1_R, graph); 
+        Phase1_Rev_Vectorized< SimdInst<int8_t> > obj (readSet_P1_R, graph, parameters); 
         obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
       }
-      else if (maxReadLength * SCORE::match <= INT16_MAX - 1) 
+      else if (maxReadLength * parameters.match <= INT16_MAX - 1) 
       {
-        Phase1_Rev_Vectorized< SimdInst<int16_t> > obj (readSet_P1_R, graph); 
+        Phase1_Rev_Vectorized< SimdInst<int16_t> > obj (readSet_P1_R, graph, parameters); 
         obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
       }
       else 
       {
-        Phase1_Rev_Vectorized< SimdInst<int32_t> > obj (readSet_P1_R, graph); 
+        Phase1_Rev_Vectorized< SimdInst<int32_t> > obj (readSet_P1_R, graph, parameters); 
         obj.alignToDAGLocal_Phase1_rev_vectorized_wrapper(outputBestScoreVector);
       }
 #else
-      alignToDAGLocal_Phase1_rev_scalar (readSet_P1_R, graph, outputBestScoreVector);
+      alignToDAGLocal_Phase1_rev_scalar (readSet_P1_R, graph, parameters, outputBestScoreVector);
 #endif
 
       auto tick2 = __rdtsc();
@@ -674,7 +683,7 @@ namespace psgl
 
       assert (readSet_P2.size() == readSet.size() );
 
-      alignToDAGLocal_Phase2 (readSet_P2, graph, outputBestScoreVector);
+      alignToDAGLocal_Phase2 (readSet_P2, graph, parameters, outputBestScoreVector);
 
       auto tick2 = __rdtsc();
       std::cout << "TIMER, psgl::alignToDAG, CPU cycles spent in phase 2  = " << tick2 - tick1
@@ -686,49 +695,62 @@ namespace psgl
    * @brief                                 alignment routine
    * @param[in]   reads                     vector of strings
    * @param[in]   graph
+   * @param[in]   parameters                input parameters
+   * @param[in]   mode                      alignment mode
    * @param[out]  outputBestScoreVector
-   * @param[in]   mode
    */
     void alignToDAG(  const std::vector<std::string> &reads, 
                       const CSR_char_container &graph,
-                      std::vector< BestScoreInfo > &outputBestScoreVector,
-                      const MODE mode)  
+                      const Parameters &parameters, 
+                      const MODE mode,
+                      std::vector< BestScoreInfo > &outputBestScoreVector)
     {
       //TODO: Support other alignment modes: global and semi-global
       switch(mode)
       {
-        case LOCAL : alignToDAGLocal (reads, graph, outputBestScoreVector); break;
+        case LOCAL : alignToDAGLocal (reads, graph, parameters, outputBestScoreVector); break;
         default: std::cerr << "ERROR, psgl::alignToDAG, Invalid alignment mode"; exit(1);
       }
     }
 
   /**
    * @brief                                 alignment routine
-   * @param[in]   qfile                     file name containing reads
-   * @param[in]   graph
+   * @param[in]   parameters                input parameters
+   * @param[in]   mode                      alignment mode
    * @param[out]  outputBestScoreVector
-   * @param[in]   mode
    */
-    int alignToDAG( const std::string &qfile, 
-                    const CSR_char_container &graph,
-                    std::vector< BestScoreInfo > &outputBestScoreVector,
-                    const MODE mode)  
+    int alignToDAG( const Parameters &parameters, 
+                    const MODE mode,  
+                    std::vector< BestScoreInfo > &outputBestScoreVector)
     {
+      psgl::graphLoader g;
+
       //Parse all reads into a vector
       std::vector<std::string> reads;
-
       assert (outputBestScoreVector.empty());
 
       {
-        //TODO: Read query sequences in batches rather than all at once
-        if( !fileExists(qfile) )
+        if (parameters.mode.compare("vg") == 0)
+          g.loadFromVG(parameters.rfile);
+        else if(parameters.mode.compare("txt") == 0)
+          g.loadFromTxt(parameters.rfile);
+        else 
         {
-          std::cerr << qfile << " not accessible." << std::endl;
+          std::cerr << "Invalid format " << parameters.mode << std::endl;
+          exit(1);
+        }
+      }
+
+      {
+        //TODO: Read query sequences in batches rather than all at once
+        if( !fileExists(parameters.qfile) )
+        {
+          std::cerr << parameters.qfile << " not accessible." << std::endl;
           exit(1);
         }
 
         //Open the file using kseq
-        FILE *file = fopen (qfile.c_str(), "r");
+        FILE *file = fopen (parameters.qfile.c_str(), "r");
         gzFile fp = gzdopen (fileno(file), "r");
         kseq_t *seq = kseq_init(fp);
 
@@ -749,7 +771,7 @@ namespace psgl
 
       std::cout << "INFO, psgl::alignToDAG, total count of reads = " << reads.size() << std::endl;
 
-      alignToDAG (reads, graph, outputBestScoreVector, mode);
+      alignToDAG (reads, g.diCharGraph, parameters, mode, outputBestScoreVector);
 
       return PSGL_STATUS_OK;
     }
@@ -757,10 +779,10 @@ namespace psgl
     /**
      * @brief     print alignment results to file
      */
-    void printResultsToFile ( const std::string &outputFile,
+    void printResultsToFile ( const Parameters &parameters,
         const std::vector< BestScoreInfo > &outputBestScoreVector)
     {
-      std::ofstream outstrm(outputFile);
+      std::ofstream outstrm(parameters.ofile);
 
       for(auto &e : outputBestScoreVector)
       {

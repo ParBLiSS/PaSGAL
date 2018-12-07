@@ -6,6 +6,7 @@
 #include "graphLoad.hpp"
 #include "align.hpp"
 #include "base_types.hpp"
+#include "parseCmdArgs.hpp"
 #include "googletest/include/gtest/gtest.h"
 
 #define QUOTE(name) #name
@@ -20,28 +21,32 @@
  **/
 TEST(localAlignment, singleQuerySequential_vg) 
 {
-  //Run sequentially
-  omp_set_num_threads( 1 ); 
-
   //get file name
   std::string dir = FOLDER;
-  auto rfile = dir + "/BRCA1_seq_graph.vg";
-  auto qfile = dir + "/BRCA1_1_read.fastq";
+  std::string rfile = dir + "/BRCA1_seq_graph.vg";
+  std::string qfile = dir + "/BRCA1_1_read.fastq";
 
-  //load graph
+  std::vector<char> QFILE(qfile.c_str(), qfile.c_str() + qfile.size() + 1u);
+  std::vector<char> RFILE(rfile.c_str(), rfile.c_str() + rfile.size() + 1u);
+  char *mode = "vg";
+  char *threads = "1"; 
 
-  psgl::graphLoader g;
-  g.loadFromVG(rfile);
+  char *argv[] = {"PaSGAL", "-m", mode, "-q", QFILE.data(), "-r", RFILE.data(),
+                  "-t", threads, "-o", "/dev/null" , nullptr};
+  int argc = 11;
+
+  psgl::Parameters parameters;        
+  psgl::parseandSave(argc, argv, parameters);
 
   std::vector< psgl::BestScoreInfo > bestScoreVector;
-  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  psgl::alignToDAG (parameters, psgl::MODE::LOCAL, bestScoreVector);
 
   //NOTE: Ground truth calculated using unit scoring system
 
   ASSERT_EQ(bestScoreVector.size(), 1); 
   ASSERT_EQ(bestScoreVector[0].score, 482);       
   ASSERT_EQ(bestScoreVector[0].strand, '-');       
-  ASSERT_EQ(psgl::seqUtils::cigarScore (bestScoreVector[0].cigar), 482);
+  ASSERT_EQ(psgl::seqUtils::cigarScore (bestScoreVector[0].cigar, parameters), 482);
 }
 
 /**
@@ -52,28 +57,32 @@ TEST(localAlignment, singleQuerySequential_vg)
  **/
 TEST(localAlignment, singleQuerySequential_txt) 
 {
-  //Run sequentially
-  omp_set_num_threads( 1 ); 
-
   //get file name
   std::string dir = FOLDER;
   auto rfile = dir + "/BRCA1_seq_graph.txt";
   auto qfile = dir + "/BRCA1_1_read.fastq";
 
-  //load graph
+  std::vector<char> QFILE(qfile.c_str(), qfile.c_str() + qfile.size() + 1u);
+  std::vector<char> RFILE(rfile.c_str(), rfile.c_str() + rfile.size() + 1u);
+  char *mode = "txt";
+  char *threads = "1"; 
 
-  psgl::graphLoader g;
-  g.loadFromTxt(rfile);
+  char *argv[] = {"PaSGAL", "-m", mode, "-q", QFILE.data(), "-r", RFILE.data(),
+                  "-t", threads, "-o", "/dev/null" , nullptr};
+  int argc = 11;
+
+  psgl::Parameters parameters;        
+  psgl::parseandSave(argc, argv, parameters);
 
   std::vector< psgl::BestScoreInfo > bestScoreVector;
-  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  psgl::alignToDAG (parameters, psgl::MODE::LOCAL, bestScoreVector);
 
   //NOTE: Ground truth calculated using unit scoring system
 
   ASSERT_EQ(bestScoreVector.size(), 1); 
   ASSERT_EQ(bestScoreVector[0].score, 482);       
   ASSERT_EQ(bestScoreVector[0].strand, '+');       
-  ASSERT_EQ(psgl::seqUtils::cigarScore (bestScoreVector[0].cigar), 482);
+  ASSERT_EQ(psgl::seqUtils::cigarScore (bestScoreVector[0].cigar, parameters), 482);
 }
 
 /**
@@ -84,21 +93,25 @@ TEST(localAlignment, singleQuerySequential_txt)
  **/
 TEST(localAlignment, multipleQueryParallelScore_vg) 
 {
-  //Run in parallel
-  omp_set_num_threads( 8 ); 
-
   //get file name
   std::string dir = FOLDER;
   auto rfile = dir + "/BRCA1_seq_graph.vg";
   auto qfile = dir + "/BRCA1_5_reads.fastq";
 
-  //load graph
+  std::vector<char> QFILE(qfile.c_str(), qfile.c_str() + qfile.size() + 1u);
+  std::vector<char> RFILE(rfile.c_str(), rfile.c_str() + rfile.size() + 1u);
+  char *mode = "vg";
+  char *threads = "8"; 
 
-  psgl::graphLoader g;
-  g.loadFromVG(rfile);
+  char *argv[] = {"PaSGAL", "-m", mode, "-q", QFILE.data(), "-r", RFILE.data(),
+                  "-t", threads, "-o", "/dev/null" , nullptr};
+  int argc = 11;
+
+  psgl::Parameters parameters;        
+  psgl::parseandSave(argc, argv, parameters);
 
   std::vector< psgl::BestScoreInfo > bestScoreVector;
-  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  psgl::alignToDAG (parameters, psgl::MODE::LOCAL, bestScoreVector);
 
   //NOTE: Ground truth calculated using unit scoring system
 
@@ -128,21 +141,25 @@ TEST(localAlignment, multipleQueryParallelScore_vg)
  **/
 TEST(localAlignment, multipleQueryParallelScore_txt) 
 {
-  //Run in parallel
-  omp_set_num_threads( 8 ); 
-
   //get file name
   std::string dir = FOLDER;
   auto rfile = dir + "/BRCA1_seq_graph.txt";
   auto qfile = dir + "/BRCA1_5_reads.fastq";
 
-  //load graph
+  std::vector<char> QFILE(qfile.c_str(), qfile.c_str() + qfile.size() + 1u);
+  std::vector<char> RFILE(rfile.c_str(), rfile.c_str() + rfile.size() + 1u);
+  char *mode = "txt";
+  char *threads = "8"; 
 
-  psgl::graphLoader g;
-  g.loadFromTxt(rfile);
+  char *argv[] = {"PaSGAL", "-m", mode, "-q", QFILE.data(), "-r", RFILE.data(),
+                  "-t", threads, "-o", "/dev/null" , nullptr};
+  int argc = 11;
 
-  std::vector< psgl::BestScoreInfo> bestScoreVector;
-  psgl::alignToDAG (qfile, g.diCharGraph, bestScoreVector, psgl::MODE::LOCAL);  
+  psgl::Parameters parameters;        
+  psgl::parseandSave(argc, argv, parameters);
+
+  std::vector< psgl::BestScoreInfo > bestScoreVector;
+  psgl::alignToDAG (parameters, psgl::MODE::LOCAL, bestScoreVector);
 
   //NOTE: Ground truth calculated using unit scoring system
 

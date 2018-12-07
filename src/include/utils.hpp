@@ -15,6 +15,7 @@
 #include <fstream>
 #include <omp.h>
 #include <immintrin.h>
+#include <cassert>
 
 #include "base_types.hpp"
 
@@ -134,7 +135,7 @@ namespace psgl
      * @brief                 compute alignment score from cigar string
      * @param[in]     cigar   the cigar string
      */
-    int32_t cigarScore (const std::string &cigar)
+    int32_t cigarScore (const std::string &cigar, const Parameters &parameters)
     {
       if (cigar.empty()) 
         return 0;
@@ -155,13 +156,13 @@ namespace psgl
           assert (c == '=' || c == 'X' || c == 'I' || c == 'D');
 
           if ( c == '=' )
-            score += SCORE::match * currentNumeric;
+            score += parameters.match * currentNumeric;
           else if ( c == 'X')
-            score += SCORE::mismatch * currentNumeric;
+            score -= parameters.mismatch * currentNumeric;
           else if (c == 'I')
-            score += SCORE::ins * currentNumeric;
+            score -= parameters.ins * currentNumeric;
           else  // c == 'D'
-            score += SCORE::del * currentNumeric;
+            score -= parameters.del * currentNumeric;
 
           currentNumeric = 0;
         }
@@ -303,13 +304,15 @@ namespace psgl
 #endif
     }
 
+    //initialize threads outside the main computation block
 #pragma omp parallel
     {
       int tid = omp_get_thread_num();
 
       if (tid == 0) 
       {
-        std::cout << "Default OMP thread count\t" << omp_get_num_threads() << "\n";
+        //do nothing
+        asm volatile ("nop");
       }
     }
 
