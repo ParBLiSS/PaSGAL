@@ -61,10 +61,13 @@ namespace psgl
               auto vg_vertex = g.node(i);
 
               //add vertex to diGraph
-              //vertex numbering in vg starts from 1, so adjust accordingly
-              diGraph.initVertexSequence(vg_vertex.id() - 1, vg_vertex.sequence());
+              diGraph.initVertexSequence(vg_vertex.id(), vg_vertex.sequence());
             }
           };
+
+          //vertex numbering in vg starts from 1, so adding a dummy vertex with id '0'
+          diGraph.addVertexCount(1);
+          diGraph.initVertexSequence(0, "N");
 
           stream::for_each(graphFile, lambda_v);
         }
@@ -86,8 +89,7 @@ namespace psgl
               assert(("Graph overlaps not supported yet", vg_edge.overlap() == 0));
 
               //add edge to diGraph
-              //vertex numbering in vg starts from 1, so adjust accordingly
-              edgeVector.emplace_back(vg_edge.from() - 1, vg_edge.to() - 1);
+              edgeVector.emplace_back(vg_edge.from(), vg_edge.to());
             }
           };
 

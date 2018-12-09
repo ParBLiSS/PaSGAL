@@ -31,7 +31,4 @@ int main(int argc, char **argv)
   //execute alignment
   if (psgl::alignToDAG (parameters, psgl::MODE::LOCAL, bestScoreVector) == PSGL_STATUS_OK)
     std::cout << "INFO, psgl::main, run finished" << std::endl;
-
-  //print results
-  psgl::printResultsToFile (parameters, bestScoreVector);
 }

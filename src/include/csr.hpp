@@ -60,6 +60,9 @@ namespace psgl
       //Container to hold metadata (e.g., DNA sequence) of all vertices in graph
       std::vector<std::string> vertex_metadata;
 
+      //Container to preserve original vertex ids after relabeling 
+      std::vector<int32_t> originalVertexId;
+
       /**
        * @brief     constructor
        */
@@ -80,6 +83,7 @@ namespace psgl
         //sequences
         {
           assert(vertex_metadata.size() == this->numVertices);
+          assert(originalVertexId.size() == this->numVertices);
 
           for(auto &seq : vertex_metadata)
           {
@@ -150,6 +154,7 @@ namespace psgl
 
         this->numVertices += n;
         this->vertex_metadata.resize(this->numVertices);
+        this->originalVertexId.resize(this->numVertices);
         this->cumulativeSeqLength.resize(this->numVertices);
       }
 
@@ -270,20 +275,20 @@ namespace psgl
        *            This function is implemented for debugging purpose
        */
       void printGraph() const
-    {
-      std::cerr << "DEBUG, psgl::CSR_container::printGraph, Printing complete graph" << std::endl;
-      std::cerr << this->numVertices << std::endl;
-
-      for (int32_t i = 0; i < this->numVertices; i++)
       {
-        for (int32_t j = offsets_out[i]; j < offsets_out[i+1]; j++)
-          std::cerr << adjcny_out[j] << " ";
+        std::cerr << "DEBUG, psgl::CSR_container::printGraph, Printing complete graph" << std::endl;
+        std::cerr << this->numVertices << std::endl;
 
-        std::cerr << vertex_metadata[i] << "\n";
+        for (int32_t i = 0; i < this->numVertices; i++)
+        {
+          for (int32_t j = offsets_out[i]; j < offsets_out[i+1]; j++)
+            std::cerr << adjcny_out[j] << " ";
+
+          std::cerr << vertex_metadata[i] << "\n";
+        }
+
+        std::cerr << "DEBUG, psgl::CSR_container::printGraph, Printing done" << std::endl;
       }
-
-      std::cerr << "DEBUG, psgl::CSR_container::printGraph, Printing done" << std::endl;
-    }
 
       /**
        * @brief     total reference sequence length represented as graph
@@ -338,10 +343,10 @@ namespace psgl
         std::cout << "INFO, psgl::CSR_container::sort, topological sort computed, bandwidth = " << directedBandwidth(order) << std::endl;
         std::cout << "INFO, psgl::CSR_container::sort, relabeling graph based on the computed order" << std::endl;
 
-        //Sorted position to vertex mapping (reverse order)
-        std::vector<int32_t> rOrder(this->numVertices);
+        //Sorted position to vertex id mapping (reverse order)
+        //preserve the old IDs before relabeling for final output reporting
         for(int32_t i = 0; i < this->numVertices; i++)
-          rOrder[ order[i] ] = i;
+          this->originalVertexId[ order[i] ] = i;
 
         //Relabel the graph completely in this order
         {
@@ -350,7 +355,7 @@ namespace psgl
             std::vector<std::string> vertex_metadata_new(this->numVertices);
 
             for (int32_t i = 0; i < this->numVertices; i++)
-              vertex_metadata_new[i] = vertex_metadata[ rOrder[i] ];
+              vertex_metadata_new[i] = vertex_metadata[ originalVertexId[i] ];
 
             vertex_metadata = vertex_metadata_new;
           }
@@ -365,7 +370,7 @@ namespace psgl
             {
               std::vector<int32_t> tmp;
 
-              for(auto j = offsets_in[ rOrder[i] ]; j < offsets_in[ rOrder[i] + 1 ]; j++)
+              for(auto j = offsets_in[ originalVertexId[i] ]; j < offsets_in[ originalVertexId[i] + 1 ]; j++)
                 tmp.push_back( order[adjcny_in[j]] );
 
               //insert adjacency elements in sorted order
@@ -378,7 +383,7 @@ namespace psgl
             {
               std::vector<int32_t> tmp;
 
-              for(auto j = offsets_out[ rOrder[i] ]; j < offsets_out[ rOrder[i] + 1 ]; j++)
+              for(auto j = offsets_out[ originalVertexId[i] ]; j < offsets_out[ originalVertexId[i] + 1 ]; j++)
                 tmp.push_back( order[adjcny_out[j]] );
 
               //insert adjacency elements in sorted order
@@ -397,10 +402,10 @@ namespace psgl
             std::vector<int32_t> offsets_out_new (this->numVertices + 1, 0);
 
             for(int32_t i = 0; i < this->numVertices; i++)
-              offsets_in_new[i + 1] = offsets_in_new[i] + ( offsets_in[ rOrder[i] + 1] - offsets_in[ rOrder[i] ] ); 
+              offsets_in_new[i + 1] = offsets_in_new[i] + ( offsets_in[ originalVertexId[i] + 1] - offsets_in[ originalVertexId[i] ] ); 
 
             for(int32_t i = 0; i < this->numVertices; i++)
-              offsets_out_new[i + 1] = offsets_out_new[i] + ( offsets_out[ rOrder[i] + 1] - offsets_out[ rOrder[i] ] ); 
+              offsets_out_new[i + 1] = offsets_out_new[i] + ( offsets_out[ originalVertexId[i] + 1] - offsets_out[ originalVertexId[i] ] ); 
 
             offsets_in  = offsets_in_new;
             offsets_out = offsets_out_new;

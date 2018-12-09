@@ -713,6 +713,30 @@ namespace psgl
       }
     }
 
+    /**
+     * @brief                                 print alignment results to file
+     * @param[in]   parameters                input parameters
+     * @param[in]   graph
+     * @param[in]   outputBestScoreVector
+     */
+    void printResultsToFile ( const Parameters &parameters,
+        const CSR_char_container &graph,
+        const std::vector< BestScoreInfo > &outputBestScoreVector)
+    {
+      std::ofstream outstrm(parameters.ofile);
+
+      for(auto &e : outputBestScoreVector)
+      {
+        outstrm << e.score << "\t"
+          << e.strand << "\t"
+          << e.qryRowStart << "\t" 
+          << e.qryRowEnd << "\t"
+          << graph.originalVertexId[e.refColumnStart] << "\t"
+          << graph.originalVertexId[e.refColumnEnd] << "\t"
+          << e.cigar << "\n";
+      }
+    }
+
   /**
    * @brief                                 alignment routine
    * @param[in]   parameters                input parameters
@@ -773,27 +797,10 @@ namespace psgl
 
       alignToDAG (reads, g.diCharGraph, parameters, mode, outputBestScoreVector);
 
+      //print results
+      printResultsToFile (parameters, g.diCharGraph, outputBestScoreVector);
+
       return PSGL_STATUS_OK;
-    }
-
-    /**
-     * @brief     print alignment results to file
-     */
-    void printResultsToFile ( const Parameters &parameters,
-        const std::vector< BestScoreInfo > &outputBestScoreVector)
-    {
-      std::ofstream outstrm(parameters.ofile);
-
-      for(auto &e : outputBestScoreVector)
-      {
-        outstrm << e.score << "\t"
-          << e.strand << "\t"
-          << e.qryRowStart << "\t" 
-          << e.qryRowEnd << "\t"
-          << e.refColumnStart << "\t"
-          << e.refColumnEnd << "\t"
-          << e.cigar << "\n";
-      }
     }
 }
 

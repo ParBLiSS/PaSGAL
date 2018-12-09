@@ -51,6 +51,8 @@ TEST(graphLoad, graphLoadVG)
   //test graph is chain built using BRCA1
   //sequence of length 81189
 
-  ASSERT_EQ(graph.numVertices, 81189); 
+  //PaSGAL adds a dummy vertex due to 1-based vertex id assignment in vg  
+  ASSERT_EQ(graph.numVertices - 1, 81189); 
+
   ASSERT_EQ(graph.numEdges, 81188); 
 }

@@ -51,6 +51,8 @@ namespace psgl
       //Container to hold character label of all vertices in graph
       std::vector<char> vertex_label;
 
+      //Container to hold original vertexi, and character offset (0-based)  
+      std::vector< std::pair<int32_t, int32_t> > originalVertexId;
 
       /**
        * @brief             build complete CSR_char graph
@@ -61,6 +63,7 @@ namespace psgl
         this->numVertices = csr.totalRefLength();
 
         vertex_label.reserve (csr.totalRefLength());
+        originalVertexId.reserve (csr.totalRefLength());
 
         adjcny_in.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
         adjcny_out.reserve (csr.totalRefLength() + csr.numEdges - csr.numVertices);
@@ -68,11 +71,16 @@ namespace psgl
         offsets_in.reserve (csr.totalRefLength() + 1);
         offsets_out.reserve (csr.totalRefLength() + 1);
 
-        //Save vertex labels
+        //Save vertex labels and original ids
         {
-          for (auto &seq : csr.vertex_metadata) 
-            for (auto &c : seq)
-              vertex_label.push_back(c);
+          for(int32_t i = 0; i < csr.numVertices; i++)
+          {
+            for(int32_t j = 0; j < csr.vertex_metadata[i].length(); j++)
+            {
+              vertex_label.push_back ( csr.vertex_metadata[i].at(j) );
+              originalVertexId.emplace_back (csr.originalVertexId[i],j);
+            }
+          }
         }
 
         //Init edges:
@@ -117,6 +125,7 @@ namespace psgl
         this->numEdges = adjcny_in.size();
 
         assert(vertex_label.size() == this->numVertices);
+        assert(originalVertexId.size() == this->numVertices);
 
         assert(adjcny_in.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);
         assert(adjcny_out.size() == csr.totalRefLength() + csr.numEdges - csr.numVertices);

@@ -44,8 +44,8 @@ namespace psgl
     template<typename Iter>
       Iter select(Iter start, Iter end) 
       {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
+        //use a fixed seed to get deterministic graph topology
+        static std::mt19937 gen(41);
         return select(start, end, gen);
       }
   }
