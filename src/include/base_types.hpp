@@ -44,6 +44,13 @@ namespace psgl
     SEMIGLOBAL  //TODO
   };  
 
+  //Metadata of query sequences
+  struct ContigInfo
+  {
+    std::string name;       //Name of the sequence
+    int32_t len;            //Length of the sequence
+  };
+
   /**
    * @brief                   container to save info about best score
    */
@@ -56,6 +63,8 @@ namespace psgl
 
     int32_t qryRowStart;
     int32_t qryRowEnd;
+
+    int32_t qryId;
 
     //score value
     int32_t score;

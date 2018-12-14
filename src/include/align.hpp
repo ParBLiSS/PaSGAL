@@ -611,6 +611,8 @@ namespace psgl
           readSet_P1_R.push_back (read_reverse);
         }
 
+        outputBestScoreVector[readno].qryId = readno;
+
         if (readSet[readno].length() > maxReadLength)
           maxReadLength = readSet[readno].length();
       }
@@ -720,19 +722,24 @@ namespace psgl
      * @param[in]   outputBestScoreVector
      */
     void printResultsToFile ( const Parameters &parameters,
+        const std::vector<ContigInfo> &qmetadata,
         const CSR_char_container &graph,
         const std::vector< BestScoreInfo > &outputBestScoreVector)
     {
       std::ofstream outstrm(parameters.ofile);
 
+      assert(qmetadata.size() == outputBestScoreVector.size());
+
       for(auto &e : outputBestScoreVector)
       {
-        outstrm << e.score << "\t"
-          << e.strand << "\t"
+        outstrm << qmetadata[e.qryId].name << "\t" 
+          << qmetadata[e.qryId].len << "\t"
           << e.qryRowStart << "\t" 
           << e.qryRowEnd << "\t"
+          << e.strand << "\t"
           << graph.originalVertexId[e.refColumnStart] << "\t"
           << graph.originalVertexId[e.refColumnEnd] << "\t"
+          << e.score << "\t"
           << e.cigar << "\n";
       }
     }
@@ -752,6 +759,9 @@ namespace psgl
       //Parse all reads into a vector
       std::vector<std::string> reads;
       assert (outputBestScoreVector.empty());
+
+      //read metadata
+      std::vector<ContigInfo> qmetadata; 
 
       {
         if (parameters.mode.compare("vg") == 0)
@@ -784,8 +794,10 @@ namespace psgl
         while ((len = kseq_read(seq)) >= 0) 
         {
           psgl::seqUtils::makeUpperCase(seq->seq.s, len);
-
           reads.push_back(seq->seq.s);
+
+          //record query name and length
+          qmetadata.push_back( ContigInfo{seq->name.s, (int32_t) seq->seq.l} );
         }
 
         //Close the input file
@@ -798,7 +810,7 @@ namespace psgl
       alignToDAG (reads, g.diCharGraph, parameters, mode, outputBestScoreVector);
 
       //print results
-      printResultsToFile (parameters, g.diCharGraph, outputBestScoreVector);
+      printResultsToFile (parameters, qmetadata, g.diCharGraph, outputBestScoreVector);
 
       return PSGL_STATUS_OK;
     }
