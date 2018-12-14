@@ -21,10 +21,10 @@ ENDIF(NOT CMAKE_BUILD_TYPE)
 # Save libs and executables in the same place
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib CACHE PATH "Output directory for libraries" )
 
+# Check if the user want to build google test applications
+OPTION(BUILD_TESTS "Inform whether test applications should be built" ON)
 # Set vtune support
 OPTION(ENABLE_VTUNE "Turn on/off the vtune support with intel compiler" OFF)
-# Check if the user want to build google test applications
-OPTION(BUILD_TESTS "Inform whether test applications should be built" OFF)
 # Check if user wants to print verbose debug messages
 OPTION(DEFINE_DEBUG_MACRO "Print verbose debug messages" OFF) 
 
@@ -32,6 +32,7 @@ IF(DEFINE_DEBUG_MACRO)
   ADD_DEFINITIONS(-DDEBUG)
 ENDIF(DEFINE_DEBUG_MACRO)
 
+# Assume avx512 availability by default
 SET(SIMD_SUPPORT avx512 CACHE STRING "Choose SIMD instrinsics, options are: avx512 avx2 none")
 SET_PROPERTY(CACHE SIMD_SUPPORT PROPERTY STRINGS avx512 avx2 none)
 
@@ -101,9 +102,11 @@ if (BUILD_TESTS)
   add_subdirectory("${PROJECT_SOURCE_DIR}/ext/googletest")
 endif(BUILD_TESTS)
 
+##
+#User is expected to set the following variable PROTOBUF_DIR 
+##
 set(PROTOBUF_DIR CACHE STRING "absolute path to protobuf installation directory")
 
-#User is expected to set PROTOBUF_DIR 
 set(PROTOBUF_INCLUDE_DIR "${PROTOBUF_DIR}/include")
 set(PROTOBUF_LIBRARY "${PROTOBUF_DIR}/lib/libprotobuf.so")
 set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_DIR}/bin/protoc")
@@ -129,7 +132,7 @@ include_directories("${PROJECT_SOURCE_DIR}/src/include")
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_subdirectory("${PROJECT_SOURCE_DIR}/tests")
 
-#### For vtune support
+#### To compile with Intel vtune library if requested
 if(ENABLE_VTUNE)
   #Configure path to vtune_amplifier library 
   include_directories("/opt/intel/vtune_amplifier_2018/include")

@@ -28,6 +28,7 @@ OPTIONS:
 1. `-DPROTOBUF_DIR=<path>` should provide path to installation directory of google protobuf library. 
 2. If avx512 feature is not available on the CPU being used, `-DSIMD_SUPPORT=<avx512/avx2/none>` should be specified accordingly. 
 3. Cmake will automatically look for default C/C++ compilers. To modify the default selection, users can set variables `-DCXX_COMPILER=<path to C++ compiler>` and `-DC_COMPILER=<path to C compiler>` if needed. 
+
 After the compilation completes, expect an executable `PaSGAL` in your build\_directory. 
 
 ## Usage
@@ -62,7 +63,7 @@ CT
 
 ## An example run
 
-Sample input data is available [data](data) folder to do a quick test run. Expect output log in the following format during execution:
+Sample input is available in [data](data) folder to do a quick test run. Expect output log in the following format during execution:
 
 ```sh
 $ PaSGAL -r data/BRCA1.vg -m "vg" -q data/reads.fa -t 16 -o output.txt
