@@ -339,6 +339,122 @@ namespace psgl
 
     return stats;
   }
+
+  /**
+   * @brief                   supports aligned memory allocation for C++ vectors
+   * @tparam[in]  Type        C++ vector type
+   * @tparam[in]  alignment   desired alignment
+   * @details                 modified from open-source github gist
+   *                          https://gist.github.com/donny-dont/1471329
+   */
+  template <typename Type, std::size_t alignment>
+  class aligned_alloc
+  {
+    public:
+
+      // The following will be the same for virtually all allocators.
+      // Following the standard C++ Library allocator specification 
+      typedef Type* pointer;
+      typedef const Type* const_pointer;
+      typedef Type& reference;
+      typedef const Type& const_reference;
+      typedef Type value_type;
+      typedef std::size_t size_type;
+      typedef ptrdiff_t difference_type;
+
+      //default constructor
+      aligned_alloc() {}
+
+      //copy constructor
+      aligned_alloc(const aligned_alloc&) {}
+
+      //rebinding constructor
+      template <typename U> aligned_alloc(const aligned_alloc<U, alignment>&) {}
+
+      //destructor
+      ~aligned_alloc() {}
+
+      //Returns the address of r as a pointer type.
+      pointer address(reference r) const
+      {
+        return &r;
+      }
+
+      //Returns the address of r as a const_pointer type.
+      const_pointer address(const_reference r) const
+      {
+        return &r;
+      }
+
+      //Return the largest possible storage available through a call to allocate.
+      size_type max_size() const
+      {
+        return (static_cast<std::size_t>(0) - static_cast<std::size_t>(1)) / sizeof(Type);
+      }
+
+      template <typename U>
+        struct rebind
+        {
+          typedef aligned_alloc<U, alignment> other;
+        };
+
+      //Return true if the two allocators can be safely interchanged.
+      bool operator==(const aligned_alloc& other) const
+      {
+        return true;
+      }
+
+      bool operator!=(const aligned_alloc& other) const
+      {
+        return !(*this == other);
+      }
+
+      //Construct an object of type Type at the location of ptr
+      void construct(pointer ptr, const Type& val) const
+      {
+        void* const pv = static_cast<void*>(ptr);
+        new (pv) Type(val);
+      }
+
+      //Call the destructor on the value pointed to by ptr
+      void destroy(pointer ptr) const
+      {
+        ptr->~Type();
+      }
+
+      //Allocate storage for n values of type Type
+      Type* allocate(size_type n) const
+      {
+        //sanity check
+        if (n == 0) 
+          return NULL;
+			
+        if (n > max_size())
+          throw std::length_error("aligned_alloc: Integer overflow");
+
+        void * const pv = _mm_malloc(n * sizeof(Type), alignment);
+
+        if (pv == NULL)
+          throw std::bad_alloc();
+
+        return static_cast<Type*>(pv);
+      }
+
+      //Deallocate storage obtained by a call to allocate.
+      void deallocate(pointer ptr) const
+      {
+        _mm_free(ptr);
+      }
+
+      template <typename U>
+        Type* allocate(size_type n, const U*) const
+        {
+          return allocate(n);
+        }
+
+    private:
+      aligned_alloc& operator=(const aligned_alloc&);
+   };
 }
 
 #endif

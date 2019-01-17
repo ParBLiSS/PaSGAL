@@ -20,7 +20,6 @@
 //External includes
 #include "kseq.h"
 #include "prettyprint.hpp"
-#include "aligned_allocator.hpp"
 
 #define DUMMY                     'B'
 
@@ -277,10 +276,10 @@ namespace psgl
 
             // modified containers to hold best-score info
             // vector elements aligned to 64 byte boundaries
-            std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> > _bestScoreVector (countReadBatches);
-            std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> > 
+            std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> > _bestScoreVector (countReadBatches);
+            std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> > 
                   _bestScoreColVector (countReadBatches * colRegistersCountPerBatch);
-            std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> > _bestScoreRowVector (countReadBatches);
+            std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> > _bestScoreRowVector (countReadBatches);
 
             // execute the alignment routine
             this->alignToDAGLocal_Phase1_vectorized (_bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
@@ -299,9 +298,9 @@ namespace psgl
 
 
             //parse best scores from vector registers
-            std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeScores (SIMD::numSeqs);
-            std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeRows   (SIMD::numSeqs);
-            std::vector<int32_t,             aligned_allocator<int32_t,             64> > storeCols   (SIMD::numSeqs);
+            std::vector<typename SIMD::type, aligned_alloc<typename SIMD::type, 64> > storeScores (SIMD::numSeqs);
+            std::vector<typename SIMD::type, aligned_alloc<typename SIMD::type, 64> > storeRows   (SIMD::numSeqs);
+            std::vector<int32_t,             aligned_alloc<int32_t,             64> > storeCols   (SIMD::numSeqs);
 
             for (size_t i = 0; i < countReadBatches; i++)
             {
@@ -480,7 +479,7 @@ namespace psgl
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
 
               //type def. for memory-aligned vector allocation for SIMD instructions
-              using AlignedVecType = std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> >;
+              using AlignedVecType = std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> >;
 
               //2D buffer to save selected columns (associated with long hops) of DP matrix
               std::size_t countLongHops = std::count (withLongHopLocal.begin(), withLongHopLocal.end(), true);
@@ -518,7 +517,7 @@ namespace psgl
               }
 
               //buffer to save read charactes for innermost loop
-              std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > readCharsInt (SIMD::numSeqs * this->blockHeight);
+              std::vector<typename SIMD::type, aligned_alloc<typename SIMD::type, 64> > readCharsInt (SIMD::numSeqs * this->blockHeight);
 
               //process SIMD::numSeqs reads in a single iteration
 #pragma omp for schedule(dynamic) nowait
@@ -775,9 +774,9 @@ namespace psgl
 
             // modified containers to hold best-score info
             // vector elements aligned to 64 byte boundaries
-            std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> > _bestScoreVector (countReadBatches);
-            std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> > _bestScoreRowVector (countReadBatches);
-            std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> > 
+            std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> > _bestScoreVector (countReadBatches);
+            std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> > _bestScoreRowVector (countReadBatches);
+            std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> > 
                   _bestScoreColVector (countReadBatches * colRegistersCountPerBatch);
 
             this->alignToDAGLocal_Phase1_rev_vectorized (outputBestScoreVector, _bestScoreVector, _bestScoreColVector, _bestScoreRowVector); 
@@ -795,9 +794,9 @@ namespace psgl
 #endif
 
             //parse best scores from vector registers
-            std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeScores (SIMD::numSeqs);
-            std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > storeRows   (SIMD::numSeqs);
-            std::vector<int32_t,             aligned_allocator<int32_t,             64> > storeCols   (SIMD::numSeqs);
+            std::vector<typename SIMD::type, aligned_alloc<typename SIMD::type, 64> > storeScores (SIMD::numSeqs);
+            std::vector<typename SIMD::type, aligned_alloc<typename SIMD::type, 64> > storeRows   (SIMD::numSeqs);
+            std::vector<int32_t,             aligned_alloc<int32_t,             64> > storeCols   (SIMD::numSeqs);
 
             for (size_t i = 0; i < countReadBatches; i++)
             {
@@ -980,7 +979,7 @@ namespace psgl
               threadTimings[omp_get_thread_num()] = omp_get_wtime();
 
               //type def. for memory-aligned vector allocation for SIMD instructions
-              using AlignedVecType = std::vector <__mxxxi, aligned_allocator<__mxxxi, 64> >;
+              using AlignedVecType = std::vector <__mxxxi, aligned_alloc<__mxxxi, 64> >;
 
               //2D buffer to save selected columns (associated with long hops) of DP matrix
               std::size_t countLongHops = std::count (withLongHopLocal.begin(), withLongHopLocal.end(), true);
@@ -1018,7 +1017,7 @@ namespace psgl
               }
 
               //buffer to save read charactes for innermost loop
-              std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > readCharsInt (SIMD::numSeqs * this->blockHeight);
+              std::vector<typename SIMD::type, aligned_alloc<typename SIMD::type, 64> > readCharsInt (SIMD::numSeqs * this->blockHeight);
 
               //process SIMD::numSeqs reads in a single iteration
 #pragma omp for schedule(dynamic) nowait
@@ -1035,8 +1034,8 @@ namespace psgl
 
                 //begin reading fwd DP results
                 {
-                  std::vector<typename SIMD::type, aligned_allocator<typename SIMD::type, 64> > fwdBestRows (SIMD::numSeqs);
-                  std::vector<int32_t, aligned_allocator<int32_t, 64> > fwdBestCols (SIMD::numSeqs);
+                  std::vector<typename SIMD::type, aligned_alloc<typename SIMD::type, 64> > fwdBestRows (SIMD::numSeqs);
+                  std::vector<int32_t, aligned_alloc<int32_t, 64> > fwdBestCols (SIMD::numSeqs);
 
                   for (size_t j = 0; j < SIMD::numSeqs; j++)
                   {
