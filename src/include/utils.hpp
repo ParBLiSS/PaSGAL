@@ -441,7 +441,7 @@ namespace psgl
       }
 
       //Deallocate storage obtained by a call to allocate.
-      void deallocate(pointer ptr) const
+      void deallocate(pointer const ptr, const std::size_t n) const
       {
         _mm_free(ptr);
       }

@@ -51,7 +51,7 @@ PaSGAL -m txt -r graph.txt -q reads.fq -o outputfile -t 24
 **Output file format:** The output is tab-delimited with each line consisting of query id, query length, 0-based start offset, end offset, strand, reference graph start, reference graph end, alignment score and cigar string. The reference offsets are indicated as tuples of the corresponding vertex id and character offset in it.
 
 ## Graph input format
-PaSGAL currently accepts a DAG in two input formats: `.vg` and `.txt`. `.vg` is a protobuf graph format, defined by VG tool developers [here](https://github.com/vgteam/vg/wiki/File-Formats). `.txt` is a simple human readable format. The first line indicates the count of total vertices (say *n*). Each subsequent line contains information of vertex *i*, 0 <= *i* < *n*. The information conveys its out-neighbor vertex ids followed by its DNA sequence. For example, the following graph is a chain of four vertices:
+PaSGAL currently accepts a DAG in two input formats: `.vg` and `.txt`. `.vg` is a protobuf serialized graph format, defined by VG tool developers [here](https://github.com/vgteam/vg/wiki/File-Formats). `.txt` is a simple human readable format. The first line indicates the count of total vertices (say *n*). Each subsequent line contains information of vertex *i*, 0 <= *i* < *n*. The information in a single line conveys its out-neighbor vertex ids, followed by its DNA sequence. For example, the following graph is a directed chain of four vertices: `AC (id:0) -> GT (id:1) -> GCCGT (id:2) -> CT (id:3)`
 
 ```sh
 4
@@ -61,12 +61,14 @@ PaSGAL currently accepts a DAG in two input formats: `.vg` and `.txt`. `.vg` is 
 CT
 ```
 
+The first line above specifies the count of vertices as 4. The second line specifies that vertex 0 has an outgoing edge to vertex 1, and the label of vertex 0 is "AC". Similarly, the third line specifies that vertex 1 has an outgoing edge to vertex 2, and its label is "GT". 
+
 ## An example run
 
 Sample input is available in [data](data) folder to do a quick test run. Expect output log in the following format during execution:
 
 ```sh
-$ PaSGAL -r data/BRCA1.vg -m "vg" -q data/reads.fa -t 16 -o output.txt
+$ PaSGAL -r data/BRCA1.vg -m "vg" -q data/reads.fa -t 36 -o output.txt
 --------
 Assert() checks     ON
 AVX SIMD support    ON (AVX512)
@@ -76,7 +78,7 @@ VTUNE profiling     OFF
 INFO, psgl::parseandSave, reference file = data/BRCA1.vg (in vg format)
 INFO, psgl::parseandSave, query file = data/reads.fa
 INFO, psgl::parseandSave, output file = output.txt
-INFO, psgl::parseandSave, thread count = 16
+INFO, psgl::parseandSave, thread count = 36
 INFO, psgl::parseandSave, scoring scheme = [ match:1 mismatch:1 ins:1 del:1 ]
 ....
 ....
