@@ -51,7 +51,7 @@ PaSGAL -m txt -r graph.txt -q reads.fq -o outputfile -t 24
 **Output file format:** The output is tab-delimited with each line consisting of query id, query length, 0-based start offset, end offset, strand, reference graph start, reference graph end, alignment score and cigar string. The reference offsets are indicated as tuples of the corresponding vertex id and character offset in it.
 
 ## Graph input format
-PaSGAL currently accepts a DAG in two input formats: `.vg` and `.txt`. `.vg` is a protobuf serialized graph format, defined by VG tool developers [here](https://github.com/vgteam/vg/wiki/File-Formats). `.txt` is a simple human readable format. The first line indicates the count of total vertices (say *n*). Each subsequent line contains information of vertex *i*, 0 <= *i* < *n*. The information in a single line conveys its out-neighbor vertex ids, followed by its DNA sequence. For example, the following graph is a directed chain of four vertices: `AC (id:0) -> GT (id:1) -> GCCGT (id:2) -> CT (id:3)`
+PaSGAL currently accepts a DAG in two input formats: `.vg` and `.txt`. `.vg` is a protobuf serialized graph format, defined by VG tool developers [here](https://github.com/vgteam/vg/wiki/File-Formats). `.txt` is a simple human readable format. The first line indicates the count of total vertices (say *n*). Each subsequent line contains information of vertex *i*, 0 <= *i* < *n*. The information in a single line conveys its zero or more out-neighbor vertex ids, followed by its non-empty DNA sequence (either space or tab separated). For example, the following graph is a directed chain of four vertices: `AC (id:0) -> GT (id:1) -> GCCGT (id:2) -> CT (id:3)`
 
 ```sh
 4
