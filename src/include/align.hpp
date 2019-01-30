@@ -22,7 +22,7 @@
 
 //External includes
 #include "kseq.h"
-#include "prettyprint.hpp"
+#include "prettyprint/prettyprint.hpp"
 
 KSEQ_INIT(gzFile, gzread)
 
