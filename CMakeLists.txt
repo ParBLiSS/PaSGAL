@@ -99,7 +99,7 @@ endif()
 #compile testing code
 if (BUILD_TESTS)
   #Add googleTest support
-  add_subdirectory("${PROJECT_SOURCE_DIR}/ext/googletest")
+  add_subdirectory("${PROJECT_SOURCE_DIR}/ext/gtest/googletest")
 endif(BUILD_TESTS)
 
 ##

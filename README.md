@@ -12,8 +12,10 @@ PaSGAL (**Pa**rallel **S**equence to **G**raph **Al**igner) is designed to accel
 
 ## Download and compile
 
+The repository and external submodules can be downloaded using the recursive clone.
+
 ```sh
-git clone <GITHUB_URL>
+git clone --recursive <GITHUB_URL>
 ```
 
 Next, compile the code using cmake utility:

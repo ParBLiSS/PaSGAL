@@ -21,7 +21,7 @@
 #endif
 
 //External includes
-#include "kseq.h"
+#include "seqtk/kseq.h"
 #include "prettyprint/prettyprint.hpp"
 
 KSEQ_INIT(gzFile, gzread)

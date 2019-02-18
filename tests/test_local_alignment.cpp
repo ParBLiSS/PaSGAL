@@ -7,7 +7,7 @@
 #include "align.hpp"
 #include "base_types.hpp"
 #include "parseCmdArgs.hpp"
-#include "googletest/include/gtest/gtest.h"
+#include "gtest/googletest/include/gtest/gtest.h"
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)

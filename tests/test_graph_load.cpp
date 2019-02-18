@@ -4,7 +4,7 @@
  */
 
 #include "graphLoad.hpp"
-#include "googletest/include/gtest/gtest.h"
+#include "gtest/googletest/include/gtest/gtest.h"
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)

@@ -1,0 +1,6 @@
+[submodule "ext/gtest"]
+	path = ext/gtest
+	url = https://github.com/google/googletest.git
+[submodule "ext/seqtk"]
+	path = ext/seqtk
+	url = https://github.com/cjain7/seqtk.git
