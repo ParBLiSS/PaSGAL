@@ -785,6 +785,7 @@ namespace psgl
 
         //Open the file using kseq
         FILE *file = fopen (parameters.qfile.c_str(), "r");
+        assert(file != NULL);
         gzFile fp = gzdopen (fileno(file), "r");
         kseq_t *seq = kseq_init(fp);
 
@@ -802,7 +803,8 @@ namespace psgl
 
         //Close the input file
         kseq_destroy(seq);  
-        gzclose(fp);  
+        gzclose(fp);
+        fclose(file);
       }
 
       std::cout << "INFO, psgl::alignToDAG, total count of reads = " << reads.size() << std::endl;

@@ -23,6 +23,7 @@ namespace psgl
   {
     //set the default scoring scheme if not modified later
     param.match = param.mismatch = param.ins = param.del = 1;
+    param.threads = 1;
 
     //define all arguments
     auto cli = 
