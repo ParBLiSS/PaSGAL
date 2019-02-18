@@ -43,7 +43,7 @@ namespace psgl
     if(!clipp::parse(argc, argv, cli)) 
     {
       //print help page
-      clipp::print ( clipp::make_man_page(cli, argv[0]) );
+      clipp::operator<<(std::cout, clipp::make_man_page(cli, argv[0])) << std::endl;
       exit(1);
     }
 

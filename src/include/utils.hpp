@@ -16,6 +16,7 @@
 #include <omp.h>
 #include <immintrin.h>
 #include <cassert>
+#include <stddef.h>
 
 #include "base_types.hpp"
 
