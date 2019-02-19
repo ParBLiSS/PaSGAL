@@ -24,10 +24,10 @@ namespace psgl
       int32_t currentVid;
 
       //sequence offset within vertex id for current position
-      std::size_t seqOffset;
+      int64_t seqOffset;
 
       //global sequence offset
-      std::size_t globalOffset;
+      int64_t globalOffset;
 
       //underlying graph container
       const CSR_container &graph;
