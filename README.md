@@ -1,7 +1,8 @@
 PaSGAL
 ========================================================================
+[![Apache 2.0 License](https://img.shields.io/badge/license-Apache%20v2.0-blue.svg)](LICENSE)
 
-PaSGAL (**Pa**rallel **S**equence to **G**raph **Al**igner) is designed to accelerate local sequence alignment of sequences to directed acyclic sequence graphs (DAGs), e.g., variation graphs, splicing graphs. The underlying algorithm is a parallelization of dynamic programming procedure for sequence to DAG alignment. This routine is also commonly referred as *partial order alignment*. Because computing exact alignments is compute intensive, PaSGAL uses Advanced Vector Extensions (AVX) SIMD instructions and OpenMP to achieve high alignment performance on CPUs equipped with multiple cores and wide SIMD width. Given a set of query sequences (e.g., long PacBio/ONT or short Illumina reads) and a reference DAG, PaSGAL produces an highest scoring optimal local alignment for each query sequence along a path in the graph. The algorithm uses inter-task parallelization, i.e., different execution units independently operate on different queries at a time. Further details about the algorithm and evaluation are available in our [preprint](https://www.biorxiv.org).
+PaSGAL (**Pa**rallel **S**equence to **G**raph **Al**igner) is designed to accelerate local sequence alignment of sequences to directed acyclic sequence graphs (DAGs), e.g., variation graphs, splicing graphs. The underlying algorithm is a parallelization of dynamic programming procedure for sequence to DAG alignment. With computing exact alignments being compute intensive, PaSGAL uses Advanced Vector Extensions (AVX) SIMD instructions and OpenMP to achieve high alignment performance on CPUs equipped with multiple cores and wide SIMD width. Given a set of query sequences (e.g., long PacBio/ONT or short Illumina reads) and a reference DAG, PaSGAL produces an highest scoring optimal local alignment for each query sequence along a path in the graph. Details about the algorithm and performance are available in our paper [below](#publication).
 
 
 ## Dependencies
@@ -67,7 +68,7 @@ The first line above specifies the count of vertices as 4. The second line speci
 
 ## An example run
 
-Sample input is available in [data](data) folder to do a quick test run. Expect output log in the following format during execution:
+Sample input is available in [data](data) folder to do a quick test run. Larger data sets which we used for benchmarking in the [paper](#publication) can be accessed [here](https://alurulab.cc.gatech.edu/PaSGAL). Expect output log in the following format during execution:
 
 ```sh
 $ PaSGAL -r data/BRCA1.vg -m "vg" -q data/reads.fa -t 36 -o output.txt
@@ -92,3 +93,8 @@ INFO, psgl::main, run finished
 * Support semi-global alignment mode
 * Support affine gap penalty
 * Support .gfa input format for graphs
+* Support intra-task parallelization
+
+## <a name=“publication”></a>Publication
+
+- **Chirag Jain, Sanchit Misra, Haowen Zhang, Alexander Dilthey and Srinivas Aluru**. "Accelerating Sequence Alignment to Graphs". *IEEE International Parallel and Distributed Processing Symposium (IPDPS) 2019*.
