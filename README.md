@@ -1,6 +1,6 @@
 PaSGAL
 ========================================================================
-[![Apache 2.0 License](https://img.shields.io/badge/license-Apache%20v2.0-blue.svg)](LICENSE)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 PaSGAL (**Pa**rallel **S**equence to **G**raph **Al**igner) is designed to accelerate local sequence alignment of sequences to directed acyclic sequence graphs (DAGs), e.g., variation graphs, splicing graphs. The underlying algorithm is a parallelization of dynamic programming procedure for sequence to DAG alignment. With computing exact alignments being compute intensive, PaSGAL uses Advanced Vector Extensions (AVX) SIMD instructions and OpenMP to achieve high alignment performance on CPUs equipped with multiple cores and wide SIMD width. Given a set of query sequences (e.g., long PacBio/ONT or short Illumina reads) and a reference DAG, PaSGAL produces an highest scoring optimal local alignment for each query sequence along a path in the graph. Details about the algorithm and performance are available in our paper [below](#publication).
 
