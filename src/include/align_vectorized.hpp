@@ -18,8 +18,6 @@
 #include "utils.hpp"
 
 //External includes
-#include "seqtk/kseq.h"
-#include "prettyprint/prettyprint.hpp"
 
 #define DUMMY                     'B'
 

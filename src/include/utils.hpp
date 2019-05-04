@@ -456,6 +456,30 @@ namespace psgl
     private:
       aligned_alloc& operator=(const aligned_alloc&);
    };
+
+  /**
+   * @brief                   overloading << operator to print vector
+   */
+  template <typename T> 
+    std::ostream& operator<<(std::ostream& os, const std::vector<T> &input)
+    {
+      for (auto const& i: input) {
+        os << i << " ";
+      }
+      return os;
+    }
+
+  /**
+   * @brief                   overloading << operator to print pair
+   */
+  template <typename T, typename S> 
+    std::ostream& operator<<(std::ostream& os, const std::pair<T, S>& v) 
+    { 
+      os << "("; 
+      os << v.first << ", " 
+        << v.second << ")"; 
+      return os; 
+    } 
 }
 
 #endif
