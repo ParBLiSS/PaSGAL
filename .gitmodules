@@ -1,6 +1,9 @@
 [submodule "ext/gtest"]
 	path = ext/gtest
 	url = https://github.com/google/googletest.git
-[submodule "ext/bwa"]
-	path = ext/bwa
-	url = https://github.com/lh3/bwa.git
+[submodule "ext/libvgio"]
+	path = ext/libvgio
+	url = https://github.com/vgteam/libvgio.git
+[submodule "ext/htslib"]
+	path = ext/htslib
+	url = https://github.com/samtools/htslib.git

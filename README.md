@@ -11,8 +11,8 @@ PaSGAL (**Pa**rallel **S**equence to **G**raph **Al**igner) is designed to accel
 ## Dependencies
 
 - [cmake](https://cmake.org) version >= 3.1
-- A C++ compiler with c++11 support, e.g., GNU `g++` (version 4.9+) or Intel `icpc` (version 15+)
-- [Google Protobuf](https://github.com/protocolbuffers/protobuf) library
+- A C++ compiler with c++14 support, e.g., GNU `g++` (version 5+) or Intel `icpc` (version 17+)
+- [Google Protobuf](https://github.com/protocolbuffers/protobuf) library, also available using [conda](https://anaconda.org/anaconda/protobuf)
 
 ## Download and compile
 
@@ -33,7 +33,7 @@ make -j4
 OPTIONS: 
 1. `-DPROTOBUF_DIR=<path>` should provide *absolute* path to installation directory of google protobuf library. 
 2. If avx512 feature is not available on the CPU being used, `-DSIMD_SUPPORT=<avx512/avx2/none>` should be specified accordingly. 
-3. Cmake will automatically look for default C/C++ compilers. To modify the default selection, users can set the two variables `-DCMAKE_CXX_COMPILER=<path to C++ compiler>` and `-DCMAKE_C_COMPILER=<path to C compiler>` if needed. 
+3. Cmake will automatically look for default C/C++ compilers. To modify the default selection if needed, users can set the two variables `-DCMAKE_CXX_COMPILER=<path to C++ compiler>` and `-DCMAKE_C_COMPILER=<path to C compiler>`. 
 
 After the compilation completes, expect an executable `PaSGAL` in your build\_directory. 
 
@@ -67,7 +67,7 @@ PaSGAL currently accepts a DAG in two input formats: `.vg` and `.txt`. `.vg` is 
 CT
 ```
 
-The first line above specifies the count of vertices as 4. The second line specifies that vertex 0 has an outgoing edge to vertex 1, and the label of vertex 0 is "AC". Similarly, the third line specifies that vertex 1 has an outgoing edge to vertex 2, and its label is "GT". 
+The first line above specifies the count of vertices as 4. The second line specifies that vertex 0 has an outgoing edge to vertex 1, and the label of vertex 0 is "AC". Similarly, the third line specifies that vertex 1 has an outgoing edge to vertex 2, and its label is "GT". The last vertex has no outgoing edge, so we just have its label. 
 
 ## An example run
 
@@ -97,7 +97,8 @@ INFO, psgl::main, run finished
 * Support affine gap penalty
 * Support .gfa input format for graphs
 * Support intra-task parallelization
+* Extend algorithm to cyclic graphs
 
 ## <a name=“publication”></a>Publication
 
-- **Chirag Jain, Sanchit Misra, Haowen Zhang, Alexander Dilthey and Srinivas Aluru**. "Accelerating Sequence Alignment to Graphs". *IEEE International Parallel and Distributed Processing Symposium (IPDPS) 2019*.
+- **Chirag Jain, Sanchit Misra, Haowen Zhang, Alexander Dilthey and Srinivas Aluru**. "[Accelerating Sequence Alignment to Graphs](https://doi.org/10.1101/651638)". *IEEE International Parallel and Distributed Processing Symposium (IPDPS) 2019*.

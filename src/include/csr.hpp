@@ -9,11 +9,10 @@
 
 #include <cassert>
 #include <iostream>
+#include <list>
 
 //Own includes
 #include "utils.hpp"
-#include "stream.hpp"
-#include "vg.pb.h"
 
 namespace psgl
 {

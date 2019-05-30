@@ -9,6 +9,7 @@
 
 #include <immintrin.h>
 #include <x86intrin.h>
+#include <zlib.h>
 
 #include "graphLoad.hpp"
 #include "csr_char.hpp"
@@ -21,7 +22,7 @@
 #endif
 
 //External includes
-#include "bwa/kseq.h"
+#include "kseq/kseq.h"
 
 KSEQ_INIT(gzFile, gzread)
 

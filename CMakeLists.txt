@@ -5,7 +5,8 @@ include(CheckCXXCompilerFlag)
 project(PaSGAL)
 
 ##### General Compilation Settings
-set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS} --std=c++11")
+set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_STANDARD 14)
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
@@ -102,11 +103,11 @@ if (BUILD_TESTS)
   add_subdirectory("${PROJECT_SOURCE_DIR}/ext/gtest/googletest")
 endif(BUILD_TESTS)
 
-##
-#User is expected to set the following variable PROTOBUF_DIR 
-##
+### Include protobuf
+# Ask user to set the following variable PROTOBUF_DIR 
 set(PROTOBUF_DIR CACHE STRING "absolute path to protobuf installation directory")
 
+# The variables below are set based on PROTOBUF_DIR
 set(PROTOBUF_INCLUDE_DIR "${PROTOBUF_DIR}/include")
 set(PROTOBUF_LIBRARY "${PROTOBUF_DIR}/lib/libprotobuf.so")
 set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_DIR}/bin/protoc")
@@ -118,11 +119,21 @@ else()
 endif()
 
 find_package(Protobuf REQUIRED)
-
-#generate C++ proto files
 include_directories(${PROTOBUF_INCLUDE_DIR})
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS "${PROJECT_SOURCE_DIR}/ext/vg.proto")
-add_library(vg_protobuf "vg.pb.cc")
+
+### Include and compile htslib
+include_directories("${PROJECT_SOURCE_DIR}/ext/htslib")
+# Advice: in case htslib is missing some core libraries, install them
+add_custom_target(LIBHTS COMMAND make WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/ext/htslib" COMMENT "Compiling htslib")
+set(HTS_LIBRARY "${PROJECT_SOURCE_DIR}/ext/htslib/libhts.so")
+
+### Include libvgio
+PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS "${PROJECT_SOURCE_DIR}/ext/libvgio/deps/vg.proto")
+add_custom_target(SYMLNK COMMAND ${CMAKE_COMMAND} -E create_symlink . vg  WORKING_DIRECTORY "${PROJECT_BINARY_DIR}" COMMENT "Adding symbolic link vg") 
+include_directories("${PROJECT_SOURCE_DIR}/ext/libvgio/include")
+file(GLOB VGIO_SRC "${PROJECT_SOURCE_DIR}/ext/libvgio/src/*.cpp")
+add_library(LIBVGIO ${PROTO_SRCS} ${VGIO_SRC})
+add_dependencies(LIBVGIO SYMLNK)
 
 #include external header files
 include_directories("${PROJECT_SOURCE_DIR}/ext")
@@ -141,4 +152,5 @@ if(ENABLE_VTUNE)
 endif(ENABLE_VTUNE)
 
 add_executable(PaSGAL "${PROJECT_SOURCE_DIR}/src/main.cpp")
-target_link_libraries(PaSGAL ${PROTOBUF_LIBRARY} vg_protobuf ${VTUNE_LIBRARY} -lz -lpthread)
+add_dependencies(PaSGAL LIBHTS SYMLNK)
+target_link_libraries(PaSGAL ${PROTOBUF_LIBRARY} LIBVGIO ${HTS_LIBRARY} ${VTUNE_LIBRARY} -lz -lpthread)

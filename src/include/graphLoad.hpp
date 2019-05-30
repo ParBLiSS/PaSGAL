@@ -15,8 +15,10 @@
 //Own includes
 #include "csr.hpp"
 #include "csr_char.hpp"
-#include "stream.hpp"
-#include "vg.pb.h"
+
+//External includes
+#include "vg/io/basic_stream.hpp"
+#include "vg/vg.pb.h"
 
 namespace psgl
 {
@@ -49,51 +51,46 @@ namespace psgl
 
         //Read vertices in the graph 
         {
-          std::ifstream graphFile {filename, std::ios::in | std::ios::binary};
-
-          std::function<void(vg::Graph&)> lambda_v = [this](vg::Graph& g) {
-
-            //Get total count of vertices
-            diGraph.addVertexCount(g.node_size());
-
-            for (int i = 0; i < g.node_size(); i++)
-            {
-              auto vg_vertex = g.node(i);
-
-              //add vertex to diGraph
-              diGraph.initVertexSequence(vg_vertex.id(), vg_vertex.sequence());
-            }
-          };
+          vg::Graph g = vg::io::inputStream(filename);
 
           //vertex numbering in vg starts from 1, so adding a dummy vertex with id '0'
+          //we are assuming that vg's vertex ids are contiguous 1,2,...g.node_size()
           diGraph.addVertexCount(1);
           diGraph.initVertexSequence(0, "N");
 
-          stream::for_each(graphFile, lambda_v);
+          //Get total count of vertices
+          diGraph.addVertexCount(g.node_size());
+
+          for (int i = 0; i < g.node_size(); i++)
+          {
+            auto vg_vertex = g.node(i);
+
+            assert(vg_vertex.id() <= g.node_size());
+
+            //add vertex to diGraph
+            diGraph.initVertexSequence(vg_vertex.id(), vg_vertex.sequence());
+          }
+
         }
 
         //Read edges in the graph 
         {
-          std::ifstream graphFile {filename, std::ios::in | std::ios::binary};
+          vg::Graph g = vg::io::inputStream(filename);
 
           std::vector <std::pair <int32_t, int32_t> > edgeVector;
 
-          std::function<void(vg::Graph&)> lambda_e = [&edgeVector](vg::Graph& g) {
-            for (int i = 0; i < g.edge_size(); i++)
-            {
-              auto vg_edge = g.edge(i);
+          for (int i = 0; i < g.edge_size(); i++)
+          {
+            auto vg_edge = g.edge(i);
 
-              //todo: add support for bi-directed graphs
-              assert(("Bi-directed graph not supported yet", vg_edge.from_start() == false));
-              assert(("Bi-directed graph not supported yet", vg_edge.to_end() == false));
-              assert(("Graph overlaps not supported yet", vg_edge.overlap() == 0));
+            //todo: add support for bi-directed graphs
+            assert(("Bi-directed graph not supported yet", vg_edge.from_start() == false));
+            assert(("Bi-directed graph not supported yet", vg_edge.to_end() == false));
+            assert(("Graph overlaps not supported yet", vg_edge.overlap() == 0));
 
-              //add edge to diGraph
-              edgeVector.emplace_back(vg_edge.from(), vg_edge.to());
-            }
-          };
-
-          stream::for_each(graphFile, lambda_e);
+            //add edge to diGraph
+            edgeVector.emplace_back(vg_edge.from(), vg_edge.to());
+          }
 
           diGraph.initEdges(edgeVector);
         }
